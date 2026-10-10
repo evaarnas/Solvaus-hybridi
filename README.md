@@ -20,7 +20,8 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 
 ## What you can do
 
-- **Generate a scramble** using cryptographically strong randomness where available.
+- **Generate legal scrambles** locally; desktop 4×4–101×101 cubes use RCube's native scramble routine.
+- **Render larger cubes from sticker textures** above 21×21 instead of creating a separate 3D mesh for every cubie.
 - **Build your own scramble** by typing standard notation such as `R U R' U'`, `Rw`, or `3Rw2`.
 - **Turn the cube yourself** with accessible face, direction, and wide-turn controls.
 - **Solve without revealing the scramble history** to the Worker or native solver.
@@ -44,7 +45,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 | Browser + desktop | **2×2** | Bounded meet-in-the-middle, beam, and island-GA strategies; shortest verified candidate wins | WASM Worker |
 | Browser + desktop | **3×3** | Two-phase Kociemba-style search | WASM Worker |
 | Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
-| Native desktop | **4×4–101×101** | RCube center, corner, and edge engine | Native C++ command thread + Rust replay verification |
+| Native desktop | **4×4–101×101** | RCube scramble and center, corner, and edge engine | Native C++ command thread + Rust replay verification |
 
 The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N; browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and independent replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
 

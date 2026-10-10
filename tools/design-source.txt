@@ -541,7 +541,7 @@ class Component extends DCLogic {
     if (this.faceBox) { this.cubeGroup.remove(this.faceBox); this.faceBox = null; }
     this.activeMove = null;
     this.N = N;
-    this.mode = N <= (this.CUBIE_MAX || 11) ? 'cubie' : 'texture';
+    this.mode = N <= (this.RENDER_CUBIE_MAX || this.CUBIE_MAX || 11) ? 'cubie' : 'texture';
     if (this.mode === 'texture') this.buildTextureCube(N);
     else this.buildCubieCube(N);
     this.updateBadges();
@@ -1192,7 +1192,7 @@ class Component extends DCLogic {
 
       // move animation
       if (this.mode === 'texture') {
-        if (this.busy) this.advanceTexture(dt);
+        if (this.busy && this.phase !== 'native-scramble-pending') this.advanceTexture(dt);
       } else if (this.activeMove) {
         const a = this.activeMove;
         a.t += dt;

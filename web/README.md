@@ -30,6 +30,7 @@ Open <http://localhost:8000>. ES modules and WebAssembly do not work through a d
 
 - 2×2/3×3 and standalone-browser 4×4–21×21 run in `solver-worker.js`.
 - Tauri desktop 4×4–101×101 uses native `solve_stickers` / `cancel_solve` commands.
+- Tauri desktop 4×4–101×101 generates scrambles with RCube's native `Cube::Scramble` routine; the frontend receives only replayable legal turns.
 - Studio solve requests contain the complete sticker-color state—not scramble history.
 - Returned moves are accepted only after independent replay reaches solved.
 

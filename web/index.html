@@ -552,7 +552,7 @@ class Component extends DCLogic {
     if (this.faceBox) { this.cubeGroup.remove(this.faceBox); this.faceBox = null; }
     this.activeMove = null;
     this.N = N;
-    this.mode = N <= (this.CUBIE_MAX || 11) ? 'cubie' : 'texture';
+    this.mode = N <= (this.RENDER_CUBIE_MAX || this.CUBIE_MAX || 11) ? 'cubie' : 'texture';
     if (this.mode === 'texture') this.buildTextureCube(N);
     else this.buildCubieCube(N);
     this.updateBadges();
@@ -1203,7 +1203,7 @@ class Component extends DCLogic {
 
       // move animation
       if (this.mode === 'texture') {
-        if (this.busy) this.advanceTexture(dt);
+        if (this.busy && this.phase !== 'native-scramble-pending') this.advanceTexture(dt);
       } else if (this.activeMove) {
         const a = this.activeMove;
         a.t += dt;
@@ -1291,6 +1291,7 @@ class Component extends DCLogic {
     }
 
     if (origReset) inst.resetSolved = function(silent){
+      this._nativeScrambleJob = (this._nativeScrambleJob || 0) + 1;
       abortPendingSolve(this);   // a pending solve must not land on a reset/rescrambled cube
       origReset(silent);
       if (this.lab){ this.lab.set_size(this.n); this.lab.reset(); }
@@ -1300,6 +1301,7 @@ class Component extends DCLogic {
       var cap = SOLVE_MAX_N || 11;
       n = Math.max(2, Math.min(cap, Math.round(Number(n)||2)));
       if (n===this.n) return;
+      this._nativeScrambleJob = (this._nativeScrambleJob || 0) + 1;
       var previousN = this.n;
       var preserveDefaultDepth = this.scrambleDepth === defaultScrambleDepth(previousN);
       abortPendingSolve(this);   // changing N invalidates an in-flight solve's moves
@@ -1428,18 +1430,93 @@ class Component extends DCLogic {
     }
     function rebuildFromScrambleHistory(self){
       if (!self.lab||!self.buildCube) return false;
-      self.buildCube(self.n); self.lab.set_size(self.n); self.lab.reset();
-      (self.lastScramble||[]).forEach(function(m){ self.applyInstant(m); self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+      self.lab.set_size(self.n); self.lab.reset();
+      if (self.mode === 'texture'){
+        (self.lastScramble||[]).forEach(function(m){ self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+        syncTextureFromLab(self);
+      } else {
+        self.buildCube(self.n);
+        (self.lastScramble||[]).forEach(function(m){ self.applyInstant(m); self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+      }
       self.scrambled=!self.lab.is_solved();
       return self.scrambled;
     }
 
+    function syncTextureFromLab(self){
+      if (!self.lab||!self.texFaces||self.texFaces.length!==6) return;
+      const d=self.texFaces[0].d, sourceFace=[5,4,0,1,2,3];
+      const colors=Array.from(self.lab.face_colors(d)), area=d*d;
+      if (colors.length!==6*area) throw new Error('invalid sticker buffer for texture display');
+      self.texFaces.forEach(function(face,index){
+        const offset=sourceFace[index]*area;
+        face.scr=colors.slice(offset,offset+area).map(function(color){
+          if (!Number.isInteger(color)||color<0||color>=self.faceList.length) throw new Error('invalid sticker color for texture display');
+          return self.faceList[color];
+        });
+        self.drawFace(index,0);
+      });
+    }
+
     inst.scramble = function(){
       if (this.busy) return;
-      if (this.mode !== 'cubie') return origScramble();   // huge (texture) cubes: design path
+      const N = this.n;
+      const core = nativeCore();
+      if (core && N >= 4 && N <= 101){
+        const job = (this._nativeScrambleJob || 0) + 1;
+        this._nativeScrambleJob = job;
+        this.busy = true;
+        this.phase = 'native-scramble-pending';
+        if (this.ui && this.ui.status) this.ui.status.textContent = 'Scrambling with RCube…';
+        if (this.syncControls) this.syncControls();
+        core.invoke('scramble_rcube', { n:N, seed:secureBelow(0x7fffffff) }).then((raw)=>{
+          if (this._nativeScrambleJob !== job || this.n !== N) return;
+          const result = JSON.parse(raw);
+          if (!result.moves || !result.moves.length) throw new Error('RCube returned no scramble moves');
+          const nextScramble = result.moves.map((m)=>{
+            const move = {axis:Number(m.axis),layer:Number(m.layer),dir:Number(m.dir)};
+            if (!Number.isInteger(move.axis) || move.axis < 0 || move.axis > 2 ||
+                !Number.isInteger(move.layer) || move.layer < 0 || move.layer >= N ||
+                (move.dir !== 1 && move.dir !== -1)) throw new Error('RCube returned an invalid scramble move');
+            return move;
+          });
+          this.phase='native-scramble-installing';
+          if (this.mode === 'cubie') this.buildCube(N);
+          clearScrambleHistory(this,true);
+          this.lastScramble = nextScramble;
+          this.lab.set_size(N);
+          this.lab.reset();
+          for (const m of this.lastScramble){
+            if (this.mode === 'cubie') this.applyInstant(m);
+            this.lab.apply_design_move(m.axis,m.layer,m.dir);
+          }
+          if (this.lab.is_solved()) throw new Error('RCube returned a solved scramble');
+          if (this.mode === 'texture') syncTextureFromLab(this);
+          this.scrambleMoveCount = Number(result.moveCount) || this.lastScramble.length;
+          this.queue=[]; this.activeMove=null;
+          this.movesDone=this.scrambleMoveCount; this.totalMoves=this.scrambleMoveCount;
+          this.solveProgress=0; this.phase='idle'; this.busy=false; this.scrambled=true; this.hasSolution=false;
+          if (this.setSolvedPct) this.setSolvedPct(0);
+          if (this.resetLanes) this.resetLanes();
+          if (this.ui && this.ui.status) this.ui.status.textContent='Scrambled with RCube — ready to solve';
+          if (this.ui && this.count) this.ui.count.style.display='none';
+          if (this.ui && this.move) this.ui.move.style.display='none';
+          if (this.syncControls) this.syncControls();
+          if (this._refreshCustomScramble) this._refreshCustomScramble(this);
+        }).catch((error)=>{
+          if (this._nativeScrambleJob !== job) return;
+          if (this.phase !== 'native-scramble-pending'){
+            this.resetSolved(true);
+            clearScrambleHistory(this,true);
+          }
+          this.phase='idle'; this.busy=false;
+          if (this.ui && this.ui.status) this.ui.status.textContent='RCube scramble failed: '+String(error);
+          if (this.syncControls) this.syncControls();
+        });
+        return;
+      }
+      if (this.mode !== 'cubie') return origScramble();   // browser-only large cubes keep the design path
       this.resetSolved(true);
       clearScrambleHistory(this,true);
-      const N = this.n;
       // 2×2/3×3 use outer turns. Supported 4×4+ cubes use standard contiguous
       // wide turns from either face, mixing inner layers while staying inside the
       // replay corpus exercised by the deterministic reduction solver.
@@ -1618,7 +1695,7 @@ class Component extends DCLogic {
       if (this.busy || this._solvePending) return;
       // Fail closed if state is ever forced outside the active platform's verified
       // range. The product no longer offers an inverse-playback "visual solve".
-      if (this.mode !== 'cubie' || this.n > SOLVE_MAX_N || !this.lab){
+      if ((this.mode !== 'cubie' && !hasNativeReduction(this)) || this.n > SOLVE_MAX_N || !this.lab){
         if (this.ui && this.ui.status) this.ui.status.textContent = 'This cube size is not supported by the verified solver';
         return;
       }
@@ -2263,6 +2340,7 @@ class Component extends DCLogic {
     }
     function configureSupportedSizes(self){
       self.CUBIE_MAX=SOLVE_MAX_N;
+      self.RENDER_CUBIE_MAX=Math.min(SOLVE_MAX_N,21);
       self.sliderToN=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
       self.nToSlider=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
       var note=self.root.querySelector('[data-size-note]');
@@ -2476,7 +2554,7 @@ class Component extends DCLogic {
       self.cubies = []; self.activeMove = null;
       if (self.updateBadges) self.updateBadges();
     }
-    function useTextureBuildWithoutWebGL(self, n){ return n > (self.CUBIE_MAX || 11); }
+    function useTextureBuildWithoutWebGL(self, n){ return n > (self.RENDER_CUBIE_MAX || self.CUBIE_MAX || 11); }
     if (typeof inst.buildCube === 'function'){
       const origMountBuildCube = inst.buildCube.bind(inst);
       inst.buildCube = function(n){

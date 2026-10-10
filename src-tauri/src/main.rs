@@ -30,6 +30,14 @@ extern "C" {
         error: *mut c_char,
         error_capacity: usize,
     ) -> i32;
+    fn rcube_scramble(
+        size: u32,
+        seed: i32,
+        output_moves: *mut *mut RcubeMove,
+        output_count: *mut usize,
+        error: *mut c_char,
+        error_capacity: usize,
+    ) -> i32;
     fn rcube_free_moves(moves: *mut RcubeMove);
 }
 
@@ -175,6 +183,78 @@ fn solve_with_rcube(
     .to_string())
 }
 
+fn scramble_with_rcube(n: usize, seed: i32) -> Result<String, String> {
+    if !(4..=101).contains(&n) {
+        return Err("invalid cube size".to_string());
+    }
+
+    let mut raw_moves = std::ptr::null_mut();
+    let mut raw_move_count = 0usize;
+    let mut error = [0 as c_char; 512];
+    let status = unsafe {
+        rcube_scramble(
+            n as u32,
+            seed,
+            &mut raw_moves,
+            &mut raw_move_count,
+            error.as_mut_ptr(),
+            error.len(),
+        )
+    };
+    if status != 0 {
+        let message = unsafe { CStr::from_ptr(error.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        return Err(if message.is_empty() {
+            "RCube scramble failed".to_string()
+        } else {
+            message
+        });
+    }
+    if raw_move_count > 0 && raw_moves.is_null() {
+        return Err("RCube returned an empty scramble buffer".to_string());
+    }
+
+    let engine_moves = if raw_move_count == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(raw_moves, raw_move_count) }.to_vec()
+    };
+    unsafe { rcube_free_moves(raw_moves) };
+
+    let mut moves = Vec::new();
+    for engine_move in engine_moves {
+        let movement = rcube_move_to_core(engine_move, n)?;
+        if movement.is_noop() {
+            continue;
+        }
+        let axis = match movement.axis {
+            Axis::X => 0,
+            Axis::Y => 1,
+            Axis::Z => 2,
+        };
+        let (quarter_turns, direction) = match movement.turns.rem_euclid(4) {
+            1 => (1, 1),
+            2 => (2, 1),
+            3 => (1, -1),
+            _ => (0, 1),
+        };
+        for _ in 0..quarter_turns {
+            moves.push(serde_json::json!({
+                "axis": axis,
+                "layer": movement.layer_start,
+                "dir": direction
+            }));
+        }
+    }
+
+    Ok(serde_json::json!({
+        "moves": moves,
+        "moveCount": raw_move_count
+    })
+    .to_string())
+}
+
 struct ActiveSolve {
     request_token: String,
     control: NativeReductionControl,
@@ -264,6 +344,16 @@ async fn solve_stickers(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn scramble_rcube(n: usize, seed: i32) -> Result<String, String> {
+    if !(4..=101).contains(&n) {
+        return Err("invalid cube size".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || scramble_with_rcube(n, seed))
+        .await
+        .map_err(|error| format!("native scramble task failed: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 fn cancel_solve(state: State<'_, SolveState>, request_token: String) -> Result<bool, String> {
     state.cancel(&request_token)
 }
@@ -271,7 +361,11 @@ fn cancel_solve(state: State<'_, SolveState>, request_token: String) -> Result<b
 fn main() {
     tauri::Builder::default()
         .manage(SolveState::default())
-        .invoke_handler(tauri::generate_handler![solve_stickers, cancel_solve])
+        .invoke_handler(tauri::generate_handler![
+            solve_stickers,
+            scramble_rcube,
+            cancel_solve
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Solvaus Hybrid");
 }
@@ -296,6 +390,53 @@ mod tests {
             result["moveCount"].as_u64().unwrap() as usize,
             result["notation"].as_array().unwrap().len()
         );
+    }
+
+    #[test]
+    fn rcube_scramble_replays_and_is_seeded() {
+        let first = scramble_with_rcube(4, 0x5eed).unwrap();
+        let second = scramble_with_rcube(4, 0x5eed).unwrap();
+        let first: serde_json::Value = serde_json::from_str(&first).unwrap();
+        let second: serde_json::Value = serde_json::from_str(&second).unwrap();
+        assert_eq!(first, second);
+
+        for n in [4, 11, 21, 32, 64, 101] {
+            let scramble = if n == 4 {
+                first.clone()
+            } else {
+                serde_json::from_str(&scramble_with_rcube(n, 0x5eed).unwrap()).unwrap()
+            };
+            let moves = scramble["moves"].as_array().unwrap();
+            assert_eq!(scramble["moveCount"].as_u64().unwrap() as usize, 27 * n);
+
+            let mut lab = cube_wasm::CubeLab::new(n);
+            for movement in moves {
+                lab.apply_design_move(
+                    movement["axis"].as_u64().unwrap() as u8,
+                    movement["layer"].as_u64().unwrap() as usize,
+                    movement["dir"].as_i64().unwrap() as i32,
+                );
+            }
+            assert!(!lab.is_solved());
+            let colors = lab.face_colors(n);
+            assert_eq!(colors.len(), 6 * n * n);
+            assert!(lab.load_face_colors(&colors));
+            if n != 4 {
+                continue;
+            }
+
+            let control = cube_wasm::native_reduction_control(n);
+            let solution = solve_with_rcube(n, &colors, &control).unwrap();
+            let solution: serde_json::Value = serde_json::from_str(&solution).unwrap();
+            for movement in solution["moves"].as_array().unwrap() {
+                lab.apply_design_move(
+                    movement["axis"].as_u64().unwrap() as u8,
+                    movement["layer"].as_u64().unwrap() as usize,
+                    movement["dir"].as_i64().unwrap() as i32,
+                );
+            }
+            assert!(lab.is_solved());
+        }
     }
 
     #[test]

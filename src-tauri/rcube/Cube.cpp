@@ -124,17 +124,42 @@ void Cube::Scramble(int seed)
 	uint rnd;
 	uint64 scrambleMoveCount = 0;
 	const uint64 totalScrambleMoves = (uint64)RowSize * 27;
+	auto rotateX = [this](uint index, int step)
+	{
+		if (moveObserver != nullptr)
+			Move(3, index, -step);
+		else
+			RotateX(index, step);
+	};
+	auto rotateY = [this](uint index, int step)
+	{
+		if (moveObserver != nullptr)
+			Move(5, index, step);
+		else
+			RotateY(index, step);
+	};
+	auto rotateZ = [this](uint index, int step)
+	{
+		if (moveObserver != nullptr)
+			Move(0, index, step);
+		else
+			RotateZ(index, step);
+	};
 
-	printf("\rScrambling moves: %llu/%llu (%.1f%%)",
-		scrambleMoveCount,
-		totalScrambleMoves,
-		100.0 * static_cast<double>(scrambleMoveCount) / static_cast<double>(totalScrambleMoves));
-	fflush(stdout);
+	if (moveObserver == nullptr)
+	{
+		printf("\rScrambling moves: %llu/%llu (%.1f%%)",
+			scrambleMoveCount,
+			totalScrambleMoves,
+			100.0 * static_cast<double>(scrambleMoveCount) / static_cast<double>(totalScrambleMoves));
+		fflush(stdout);
+	}
 
 	auto reportScrambleMove = [&]()
 	{
 		scrambleMoveCount++;
-		if (scrambleMoveCount % 1000 == 0 || scrambleMoveCount == totalScrambleMoves)
+		if (moveObserver == nullptr &&
+			(scrambleMoveCount % 1000 == 0 || scrambleMoveCount == totalScrambleMoves))
 		{
 			printf("\rScrambling moves: %llu/%llu (%.1f%%)",
 				scrambleMoveCount,
@@ -156,17 +181,17 @@ void Cube::Scramble(int seed)
 
 			if (rnd == 0)
 			{
-				RotateX(rand() % RowSize, (rand() & 3) + 1);
+				rotateX(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 			if (rnd == 1)
 			{
-				RotateY(rand() % RowSize, (rand() & 3) + 1);
+				rotateY(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 			if (rnd == 2)
 			{
-				RotateZ(rand() % RowSize, (rand() & 3) + 1);
+				rotateZ(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 		}
@@ -174,11 +199,11 @@ void Cube::Scramble(int seed)
 		//Force every row and column to rotate atleast once
 		for (uint i = 0; i < RowSize; i++)
 		{
-			RotateX(i, (rand() & 3) + 1);
+			rotateX(i, (rand() & 3) + 1);
 			reportScrambleMove();
-			RotateY(i, (rand() & 3) + 1);
+			rotateY(i, (rand() & 3) + 1);
 			reportScrambleMove();
-			RotateZ(i, (rand() & 3) + 1);
+			rotateZ(i, (rand() & 3) + 1);
 			reportScrambleMove();
 		}
 
@@ -189,17 +214,17 @@ void Cube::Scramble(int seed)
 
 			if (rnd == 0)
 			{
-				RotateX(rand() % RowSize, (rand() & 3) + 1);
+				rotateX(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 			if (rnd == 1)
 			{
-				RotateY(rand() % RowSize, (rand() & 3) + 1);
+				rotateY(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 			if (rnd == 2)
 			{
-				RotateZ(rand() % RowSize, (rand() & 3) + 1);
+				rotateZ(rand() % RowSize, (rand() & 3) + 1);
 				reportScrambleMove();
 			}
 		}
@@ -207,7 +232,8 @@ void Cube::Scramble(int seed)
 		seed = (seed + 1) % 0x0FFFFFF;
 	}
 
-	printf("\n");
+	if (moveObserver == nullptr)
+		printf("\n");
 }
 
 void Cube::Solve()

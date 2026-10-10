@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#include <mutex>
 #include <new>
 #include <vector>
 
@@ -20,6 +21,8 @@ struct SolveContext {
 	CancellationCheck isCancelled;
 	void* cancellationContext;
 };
+
+static std::mutex scrambleMutex;
 
 static void recordMove(void* rawContext, byte face, uint depth, int turns)
 {
@@ -119,6 +122,63 @@ extern "C" int rcube_solve(
 	{
 		setError(error, errorCapacity, "solve cancelled or timed out");
 		return 2;
+	}
+	catch (const std::bad_alloc&)
+	{
+		setError(error, errorCapacity, "RCube ran out of memory");
+		return 1;
+	}
+	catch (const std::exception& exception)
+	{
+		setError(error, errorCapacity, exception.what());
+		return 1;
+	}
+	catch (...)
+	{
+		setError(error, errorCapacity, "RCube failed with an unknown error");
+		return 1;
+	}
+}
+
+extern "C" int rcube_scramble(
+	std::uint32_t size,
+	std::int32_t seed,
+	RcubeMove** outputMoves,
+	std::size_t* outputCount,
+	char* error,
+	std::size_t errorCapacity)
+{
+	if (outputMoves == nullptr || outputCount == nullptr)
+	{
+		setError(error, errorCapacity, "missing output buffer");
+		return 1;
+	}
+	*outputMoves = nullptr;
+	*outputCount = 0;
+
+	if (size < 4 || size > 101)
+	{
+		setError(error, errorCapacity, "RCube supports scrambling 4x4 through 101x101");
+		return 1;
+	}
+
+	try
+	{
+		Cube cube(static_cast<uint>(size));
+		cube.MovesPerFrame = 0;
+		SolveContext context{{}, nullptr, nullptr};
+		cube.SetMoveObserver(recordMove, &context);
+		{
+			std::lock_guard<std::mutex> lock(scrambleMutex);
+			cube.Scramble(seed);
+		}
+		cube.SetMoveObserver(nullptr, nullptr);
+
+		auto* result = new RcubeMove[context.moves.size()];
+		std::copy(context.moves.begin(), context.moves.end(), result);
+		*outputMoves = result;
+		*outputCount = context.moves.size();
+		return 0;
 	}
 	catch (const std::bad_alloc&)
 	{
