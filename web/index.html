@@ -255,6 +255,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
               <div style="display:flex;align-items:baseline;gap:7px;">
                 <span data-sol-count style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;">—</span>
                 <span style="font-size:13px;color:#A6A299;">moves</span>
+                <span data-sol-time style="font-size:12px;color:#8C887F;margin-left:4px;"></span>
               </div>
             </div>
             <button data-copy data-onclick="onCopy" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8C887F;padding:7px 11px;border:1px solid #E4E1DA;border-radius:9px;transition:.16s;">
@@ -432,6 +433,7 @@ class Component extends DCLogic {
       pieces: this.q('[data-pieces]'),
       nInfo: this.q('[data-n-info]'),
       solCount: this.q('[data-sol-count]'),
+      solTime: this.q('[data-sol-time]'),
       solChips: this.q('[data-sol-chips]'),
       studio: this.q('[data-id="studio"]'),
       swarmView: this.q('[data-id="swarm"]'),
@@ -936,6 +938,7 @@ class Component extends DCLogic {
       this.setSolvedPct(1);
       this.ui.status.textContent = 'Solved — scramble to begin';
       this.ui.solCount.textContent = '—';
+      if (this.ui.solTime) this.ui.solTime.textContent = '';
       this.ui.solChips.innerHTML = '<span style="font-size:12.5px;color:#B7B3AA;">Solve a scramble to see the winning path.</span>';
       this.syncControls();
     }
@@ -961,7 +964,6 @@ class Component extends DCLogic {
       this.ui.status.textContent = 'Solved ✓';
       this.ui.count.style.display = 'none';
       this.finishLanes();
-      this.showSolution();
       this._textureReplayMoves = null;
     }
     this.syncControls();
@@ -1051,7 +1053,7 @@ class Component extends DCLogic {
     if (this.mode === 'texture') {
       const moveCount = this.realMoveCount || this.totalMoves;
       this.ui.solCount.textContent = moveCount.toLocaleString();
-      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + ' verified moves replayed on the cube.</span>';
+      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + ' verified moves.</span>';
       return;
     }
     const moves = this.lastSolution;
@@ -1681,9 +1683,11 @@ class Component extends DCLogic {
           s.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:3px 7px;background:#F4F3EF;border-radius:6px;color:#3a3933;";
           this.ui.solChips.appendChild(s);
         }).bind(this));
-        return;
+      } else {
+        origShowSolution();
       }
-      return origShowSolution();
+      var time = this.root.querySelector('[data-sol-time]');
+      if (time) time.textContent = this._solveElapsedMs > 0 ? elapsedLabel(this._solveElapsedMs) : '';
     };
     var origCopyPath = inst.copyPath ? inst.copyPath.bind(inst) : null;
     if (origCopyPath) inst.copyPath = function(){
@@ -1712,8 +1716,20 @@ class Component extends DCLogic {
       return Date.now().toString(16)+'-'+parts.join('');
     }
     function elapsedLabel(ms){
-      var seconds = Math.max(0, Math.floor(ms / 1000));
-      return seconds < 60 ? (seconds + 's') : (Math.floor(seconds/60) + 'm ' + (seconds%60) + 's');
+      var totalSeconds = Math.max(0, ms / 1000);
+      function formatSeconds(seconds){
+        var decimals = seconds < 1 ? 2 : seconds < 10 ? 1 : 0;
+        var rounded = Number(seconds.toFixed(decimals));
+        return { value:rounded, text:rounded.toFixed(decimals) + 's' };
+      }
+      if (totalSeconds < 60){
+        var shortTime = formatSeconds(totalSeconds);
+        if (shortTime.value < 60) return shortTime.text;
+      }
+      var minutes = Math.floor(totalSeconds / 60);
+      var remaining = formatSeconds(totalSeconds - minutes * 60);
+      if (remaining.value >= 60){ minutes++; remaining = formatSeconds(0); }
+      return minutes + 'm ' + remaining.text;
     }
     function refreshSolveActivity(self){
       if (!self._solvePending) return;
@@ -1838,6 +1854,8 @@ class Component extends DCLogic {
       if (!this.scrambled){ if (this.scramble) this.scramble(); if (!this.scrambled) return; }
       // Clear the previous solve's data; the verified result repopulates it.
       this.realNotation = null; this.realMoveCount = null;
+      this._solveElapsedMs = 0;
+      if (this.ui && this.ui.solTime) this.ui.solTime.textContent = '';
       // Real solve for every supported size. _solvePending (not busy) blocks
       // re-entry without letting the animation loop finish an empty queue.
       this._solvePending = true;
@@ -2069,6 +2087,7 @@ class Component extends DCLogic {
         self.totalMoves = self.queue.length;
       }
       self.phase = 'solving'; self.busy = true;
+      if (self.showSolution) self.showSolution();
       if (self.ui && self.ui.status) self.ui.status.textContent = 'RCube reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
@@ -2469,6 +2488,7 @@ class Component extends DCLogic {
       if (self.ui&&self.ui.move) self.ui.move.style.display='none';
       if (self.ui&&self.ui.status) self.ui.status.textContent=solved?'Custom turns return to solved':(label||'Custom scramble ready to solve');
       if (self.ui&&self.ui.solCount) self.ui.solCount.textContent='—';
+      var solutionTime=self.root.querySelector('[data-sol-time]'); if(solutionTime)solutionTime.textContent='';
       if (self.ui&&self.ui.solChips) self.ui.solChips.innerHTML='<span style="font-size:12.5px;color:#66635C;">Solve this custom scramble to see a verified path.</span>';
       if (self.syncControls) self.syncControls();
       refreshCustomScramble(self);

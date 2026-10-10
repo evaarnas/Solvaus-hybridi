@@ -255,6 +255,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
               <div style="display:flex;align-items:baseline;gap:7px;">
                 <span data-sol-count style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;">—</span>
                 <span style="font-size:13px;color:#A6A299;">moves</span>
+                <span data-sol-time style="font-size:12px;color:#8C887F;margin-left:4px;"></span>
               </div>
             </div>
             <button data-copy onClick="{{ onCopy }}" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8C887F;padding:7px 11px;border:1px solid #E4E1DA;border-radius:9px;transition:.16s;">
@@ -421,6 +422,7 @@ class Component extends DCLogic {
       pieces: this.q('[data-pieces]'),
       nInfo: this.q('[data-n-info]'),
       solCount: this.q('[data-sol-count]'),
+      solTime: this.q('[data-sol-time]'),
       solChips: this.q('[data-sol-chips]'),
       studio: this.q('[data-id="studio"]'),
       swarmView: this.q('[data-id="swarm"]'),
@@ -925,6 +927,7 @@ class Component extends DCLogic {
       this.setSolvedPct(1);
       this.ui.status.textContent = 'Solved — scramble to begin';
       this.ui.solCount.textContent = '—';
+      if (this.ui.solTime) this.ui.solTime.textContent = '';
       this.ui.solChips.innerHTML = '<span style="font-size:12.5px;color:#B7B3AA;">Solve a scramble to see the winning path.</span>';
       this.syncControls();
     }
@@ -950,7 +953,6 @@ class Component extends DCLogic {
       this.ui.status.textContent = 'Solved ✓';
       this.ui.count.style.display = 'none';
       this.finishLanes();
-      this.showSolution();
       this._textureReplayMoves = null;
     }
     this.syncControls();
@@ -1040,7 +1042,7 @@ class Component extends DCLogic {
     if (this.mode === 'texture') {
       const moveCount = this.realMoveCount || this.totalMoves;
       this.ui.solCount.textContent = moveCount.toLocaleString();
-      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + ' verified moves replayed on the cube.</span>';
+      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + ' verified moves.</span>';
       return;
     }
     const moves = this.lastSolution;

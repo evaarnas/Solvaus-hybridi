@@ -379,9 +379,11 @@ WIRE = r'''
           s.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:3px 7px;background:#F4F3EF;border-radius:6px;color:#3a3933;";
           this.ui.solChips.appendChild(s);
         }).bind(this));
-        return;
+      } else {
+        origShowSolution();
       }
-      return origShowSolution();
+      var time = this.root.querySelector('[data-sol-time]');
+      if (time) time.textContent = this._solveElapsedMs > 0 ? elapsedLabel(this._solveElapsedMs) : '';
     };
     var origCopyPath = inst.copyPath ? inst.copyPath.bind(inst) : null;
     if (origCopyPath) inst.copyPath = function(){
@@ -410,8 +412,20 @@ WIRE = r'''
       return Date.now().toString(16)+'-'+parts.join('');
     }
     function elapsedLabel(ms){
-      var seconds = Math.max(0, Math.floor(ms / 1000));
-      return seconds < 60 ? (seconds + 's') : (Math.floor(seconds/60) + 'm ' + (seconds%60) + 's');
+      var totalSeconds = Math.max(0, ms / 1000);
+      function formatSeconds(seconds){
+        var decimals = seconds < 1 ? 2 : seconds < 10 ? 1 : 0;
+        var rounded = Number(seconds.toFixed(decimals));
+        return { value:rounded, text:rounded.toFixed(decimals) + 's' };
+      }
+      if (totalSeconds < 60){
+        var shortTime = formatSeconds(totalSeconds);
+        if (shortTime.value < 60) return shortTime.text;
+      }
+      var minutes = Math.floor(totalSeconds / 60);
+      var remaining = formatSeconds(totalSeconds - minutes * 60);
+      if (remaining.value >= 60){ minutes++; remaining = formatSeconds(0); }
+      return minutes + 'm ' + remaining.text;
     }
     function refreshSolveActivity(self){
       if (!self._solvePending) return;
@@ -536,6 +550,8 @@ WIRE = r'''
       if (!this.scrambled){ if (this.scramble) this.scramble(); if (!this.scrambled) return; }
       // Clear the previous solve's data; the verified result repopulates it.
       this.realNotation = null; this.realMoveCount = null;
+      this._solveElapsedMs = 0;
+      if (this.ui && this.ui.solTime) this.ui.solTime.textContent = '';
       // Real solve for every supported size. _solvePending (not busy) blocks
       // re-entry without letting the animation loop finish an empty queue.
       this._solvePending = true;
@@ -767,6 +783,7 @@ WIRE = r'''
         self.totalMoves = self.queue.length;
       }
       self.phase = 'solving'; self.busy = true;
+      if (self.showSolution) self.showSolution();
       if (self.ui && self.ui.status) self.ui.status.textContent = 'RCube reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
@@ -1167,6 +1184,7 @@ WIRE = r'''
       if (self.ui&&self.ui.move) self.ui.move.style.display='none';
       if (self.ui&&self.ui.status) self.ui.status.textContent=solved?'Custom turns return to solved':(label||'Custom scramble ready to solve');
       if (self.ui&&self.ui.solCount) self.ui.solCount.textContent='—';
+      var solutionTime=self.root.querySelector('[data-sol-time]'); if(solutionTime)solutionTime.textContent='';
       if (self.ui&&self.ui.solChips) self.ui.solChips.innerHTML='<span style="font-size:12.5px;color:#66635C;">Solve this custom scramble to see a verified path.</span>';
       if (self.syncControls) self.syncControls();
       refreshCustomScramble(self);
