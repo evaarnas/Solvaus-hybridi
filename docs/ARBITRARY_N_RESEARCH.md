@@ -6,11 +6,11 @@ Build a replay-verified solver for every `N >= 2` that fits available memory and
 
 Evolutionary search is a real supplemental technique for candidate exploration and the Swarm visualization. It is not the completeness mechanism for large cubes. General solving uses deterministic reduction: centers, wing orbits, reduced 3×3, and parity correction.
 
-## Current evidence (2026-07-12)
+## Current evidence (2026-10-10)
 
 - 2×2: bounded exact/beam/evolutionary race.
 - 3×3: checked, replay-verified two-phase solver.
-- Desktop 4×4–11×11: release-mode wide-turn replay corpus passes (20 cases each through 6×6, 10 each through 8×8, and 3 each through 11×11) and is wired into release CI. Tauri runs this path on a cancellable native Rust thread. Browser WASM exposes 4×4–21×21 with a 570-second deadline for 9×9–21×21; runtime-smoke 4×4, 11×11, and 21×21 states are replay-verified.
+- Rust reduction 4×4–11×11: release-mode wide-turn replay corpus passes (20 cases each through 6×6, 10 each through 8×8, and 3 each through 11×11) and is wired into release CI. Browser WASM exposes 4×4–21×21 with a 570-second deadline for 9×9–21×21; runtime-smoke 4×4, 11×11, and 21×21 states are replay-verified.
 - 12×12: full controlled replay gate passes; the application still does not route sizes above 11 because interactive deadlines and frontier reliability remain intentionally conservative.
 - 20×20: full corpus 3/3 plus sparse, alternating, and all-nine-orbit adversarial parity/replay gates pass with the polynomial visible-form normalizer.
 - 24×24: full corpus 3/3; 28×28, 32×32, 36×36, and 40×40 each pass 2/2; 44×44 passes 2/2 after the current additional-seed gate.
@@ -117,7 +117,7 @@ Noncontiguous multi-slice batching is an optional optimization only after its co
 - The exact final project gate passes again after those frontend fixes. Provenance is still required before deleting generation classes, because shortest-word dedup erases alternate origins; no class is deleted in this release. Frontier expansion stops at N=44 because the second seed's 1.52 GB peak makes an N=48 probe poor release-value per resource cost. The advertised N=11 product ceiling remains unchanged.
 - Desktop runtime follow-up found two integration gaps that native unit tests could not expose: production center timing used `std::time::Instant`, which traps on `wasm32-unknown-unknown`, and a six-turn N=11 state made from unrelated bare inner slices reached the 290-second fallback deadline. Center timing now uses `web_time`; a generated-WASM Node smoke executes sticker-only 4×4 reduction plus independent replay on every desktop CI OS.
 - Browser size coverage now reaches 21×21 with a 570-second reduction budget and ten-minute UI watchdog; the standalone desktop app remains capped at 11×11. The generated-WASM runtime smoke solves and independently replays a deterministic six-turn 21×21 wide-turn state in 66.57 seconds locally, with 20,203 returned HTM. This gate runs with the existing browser WASM runtime smoke in CI. The browser 11×11 sample completes in about 14 seconds in the recorded local run, with 5,172 returned HTM; neither sample is a general worst-case timing guarantee.
-- Desktop 4×4–11×11 now routes sticker colors to native Tauri `solve_stickers`/`cancel_solve` commands. Automatic large-cube challenges use standard contiguous wide turns from either face, matching the advertised release corpus rather than arbitrary unrelated bare slices. The native sticker-only N=11 wide-turn gate solves and replays in 10.93 seconds test time, and CI runs it on macOS, Windows, and Linux.
+- Desktop 4×4–11×11 routes sticker colors to native Tauri `solve_stickers`/`cancel_solve` commands and the RCube C++ engine. The bridge now converts RCube's opposite face-row orientation and X/Z turn conventions, and asks RCube to emit replayable commutator moves only when the integration observer is attached; standalone solving retains the direct optimized center path. An end-to-end 11×11 browser-smoke state now solves and independently replays through the desktop bridge in 15 ms locally. The separate 10.93-second N=11 sticker-state gate calls the Rust reduction entrypoint and is not an RCube performance measurement; CI exercises that Rust path on macOS, Windows, and Linux.
 
 ## Safety gates before lifting the app’s N=11 solve ceiling
 

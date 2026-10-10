@@ -48,10 +48,11 @@ fn rcube_move_to_core(movement: RcubeMove, n: usize) -> Result<Move, String> {
     }
 
     let (axis, layer, direction) = match movement.face {
-        0 => (Axis::Z, n - 1 - depth, 1),
-        1 => (Axis::X, n - 1 - depth, 1),
-        2 => (Axis::Z, depth, -1),
-        3 => (Axis::X, depth, -1),
+        // RCube and cube_core use opposite positive directions for X and Z.
+        0 => (Axis::Z, n - 1 - depth, -1),
+        1 => (Axis::X, n - 1 - depth, -1),
+        2 => (Axis::Z, depth, 1),
+        3 => (Axis::X, depth, 1),
         4 => (Axis::Y, n - 1 - depth, -1),
         5 => (Axis::Y, depth, 1),
         _ => return Err("RCube returned an invalid face".to_string()),
@@ -295,6 +296,35 @@ mod tests {
             result["moveCount"].as_u64().unwrap() as usize,
             result["notation"].as_array().unwrap().len()
         );
+    }
+
+    #[test]
+    fn rcube_n11_browser_wide_turn_state() {
+        let n = 11;
+        let mut source = cube_wasm::CubeLab::new(n);
+        for (axis, start, width, dir) in [
+            (0, 0, 5, 1),
+            (1, 6, 5, -1),
+            (2, 0, 5, 1),
+            (0, 6, 5, -1),
+            (1, 0, 5, 1),
+            (2, 6, 5, -1),
+        ] {
+            for layer in start..start + width {
+                source.apply_design_move(axis, layer, dir);
+            }
+        }
+        let colors = source.face_colors(n);
+        let control = NativeReductionControl::with_timeout(std::time::Duration::from_secs(5));
+        let started = Instant::now();
+        let result = solve_with_rcube(n, &colors, &control);
+        eprintln!(
+            "RCube N=11 browser-smoke state elapsed: {:?}",
+            started.elapsed()
+        );
+        let result = result.expect("RCube must solve and replay the 11x11 browser-smoke state");
+        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(result["winner"], "rcube");
     }
 
     #[test]

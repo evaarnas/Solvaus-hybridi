@@ -82,7 +82,9 @@ extern "C" int rcube_solve(
 			{
 				for (std::uint32_t col = 0; col < size; ++col)
 				{
-					const auto color = colors[inputFace * faceArea + row * size + col];
+					// RCube's face rows run opposite to cube_core's.
+					const auto inputRow = size - 1 - row;
+					const auto color = colors[inputFace * faceArea + inputRow * size + col];
 					if (color >= 6)
 					{
 						setError(error, errorCapacity, "sticker color index is out of range");

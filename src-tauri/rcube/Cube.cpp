@@ -591,22 +591,20 @@ void Cube::PushCenterPieces(byte src, byte dst, byte color)
 					continue;
 				}
 
-				OptomizedMovement(mstack.get(), stkptr, r, src, dst, sq, dq);
-
-				//Move the pieces
-				//for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], -d);
-
-				//Move(dst, 0, 1);
-
-				//Move(srcl, r, -d);
-
-				//Move(dst, 0, -1);
-
-				//for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], d);
-
-				//Move(dst, 0, 1);
-
-				//Move(srcl, r, d);
+				if (moveObserver == nullptr)
+				{
+					OptomizedMovement(mstack.get(), stkptr, r, src, dst, sq, dq);
+				}
+				else
+				{
+					for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], -d);
+					Move(dst, 0, 1);
+					Move(srcl, r, -d);
+					Move(dst, 0, -1);
+					for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], d);
+					Move(dst, 0, 1);
+					Move(srcl, r, d);
+				}
 			}
 		}
 
