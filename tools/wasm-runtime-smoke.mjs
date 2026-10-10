@@ -57,3 +57,12 @@ smokeReduction(11, (cube) => {
   applyWideTurn(cube, 11, 1, 0, 5, 1);
   applyWideTurn(cube, 11, 2, 6, 5, -1);
 });
+
+smokeReduction(21, (cube) => {
+  applyWideTurn(cube, 21, 0, 0, 10, 1);
+  applyWideTurn(cube, 21, 1, 11, 10, -1);
+  applyWideTurn(cube, 21, 2, 0, 10, 1);
+  applyWideTurn(cube, 21, 0, 11, 10, -1);
+  applyWideTurn(cube, 21, 1, 0, 10, 1);
+  applyWideTurn(cube, 21, 2, 11, 10, -1);
+});

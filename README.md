@@ -16,7 +16,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 
 > [!IMPORTANT]
 > **Solvaus Hybrid only offers sizes it can solve and replay-verify.**
-> Both the native desktop app and standalone browser build support **2×2–11×11**. Browser solves from 9×9 to 11×11 can take several minutes; the worker enforces a five-minute watchdog and can be cancelled.
+> The native desktop app supports **2×2–11×11**; the standalone browser supports **2×2–21×21**. Browser solves from 9×9 to 21×21 may take up to 10 minutes and can be cancelled.
 
 ## What you can do
 
@@ -26,14 +26,14 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 - **Solve without revealing the scramble history** to the Worker or native solver.
 - **Cancel long solves or replays** without leaving the visual cube and Rust cube out of sync.
 - **Watch evolutionary computing** on real 2×2/3×3 candidate populations.
-- **Inspect truthful solver telemetry** while 4×4–11×11 cubes are solved.
+- **Inspect truthful solver telemetry** while 4×4+ cubes are solved.
 
 ## A 60-second tour
 
-1. **Choose a supported size.** Both desktop and browser offer 2×2 through 11×11.
+1. **Choose a supported size.** Desktop offers 2×2 through 11×11; browser offers 2×2 through 21×21.
 2. **Create the state.** Press **Scramble**, enter an algorithm, or turn faces manually.
 3. **Press Solve.** The solver receives the complete sticker-color state—not the scramble sequence.
-4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–11×11 solves use bounded WASM reduction, while desktop uses the cancellable native RCube engine.
+4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–21×21 solves use bounded WASM reduction, while desktop uses the cancellable native RCube engine.
 5. **Verify and replay.** Solver moves are replayed by the Rust cube model and accepted only when the cube is solved.
 6. **Watch the 3D animation.** The existing Cube-Solver renderer animates the verified move sequence in real time.
 
@@ -43,10 +43,10 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 |---|---:|---|---|
 | Browser + desktop | **2×2** | Bounded meet-in-the-middle, beam, and island-GA strategies; shortest verified candidate wins | WASM Worker |
 | Browser + desktop | **3×3** | Two-phase Kociemba-style search | WASM Worker |
-| Standalone browser | **4×4–11×11** | Deterministic reduction | Rust/WASM Worker |
+| Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
 | Native desktop | **4×4–11×11** | RCube center, corner, and edge engine | Native C++ command thread + Rust replay verification |
 
-The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N; browser builds use the Rust reduction path, with a 290-second solver deadline for 9×9–11×11. A browser WASM runtime smoke solves and independently replays an 11×11 wide-turn state, but actual solve time and returned move count vary substantially with the input and device. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
+The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N; browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and independent replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
 
 ### Why stop at 11×11 on desktop?
 
@@ -117,7 +117,7 @@ For **2×2 and 3×3**, every card is a live evolutionary trial synchronized to t
 
 The UI passes the local scramble moves to Swarm only to reconstruct the shared starting cube. Evolutionary candidates search from that resulting state; they do not receive or return a stored inverse.
 
-For **4×4–11×11**, Swarm does **not** pretend evolution is solving the cube. It switches to large-cube solver telemetry: elapsed activity, the active engine's stages, cancellation, and final replay proof.
+For **4×4 and larger**, Swarm does **not** pretend evolution is solving the cube. It switches to large-cube solver telemetry: elapsed activity, the active engine's stages, cancellation, and final replay proof.
 
 ## Verification and privacy
 
@@ -143,7 +143,7 @@ This is an implementation fairness boundary—not a cryptographic proof—but it
 
 ```mermaid
 flowchart LR
-    UI[Three.js Studio / Swarm] -->|2×2–11×11 sticker state| Worker[WASM Web Worker]
+    UI[Three.js Studio / Swarm] -->|2×2–21×21 sticker state| Worker[WASM Web Worker]
     UI -->|desktop 4×4–11×11 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]

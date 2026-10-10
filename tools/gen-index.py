@@ -416,11 +416,11 @@ WIRE = r'''
       this._solveJobId = (this._solveJobId || 0) + 1;
       this._solveRequestToken = solveRequestToken();
       var solveJobId = this._solveJobId;
-      // Reduction grows quickly with N. Keep a watchdog, but size it from measured
-      // release behavior so a valid 9×9–11×11 solve is not killed at eight seconds.
+      // Keep room for the WASM reduction deadline to unwind and replay-verify.
       var _sw = this;
-      // The WASM reduction solver has a 290-second deadline for 9×9–11×11.
-      var watchdogMs = this.n <= 3 ? 8000 : this.n <= 5 ? 30000 : this.n <= 8 ? 120000 : 300000;
+      // Browser reduction has a 570-second deadline for 9×9–21×21; desktop RCube
+      // keeps its existing 290-second solve budget.
+      var watchdogMs = this.n <= 3 ? 8000 : this.n <= 5 ? 30000 : this.n <= 8 ? 120000 : (nativeCore() ? 300000 : 600000);
       clearTimeout(this._solveWatchdog);
       this._solveWatchdog = setTimeout(function(){
         if (!_sw._solvePending || _sw._solveJobId !== solveJobId) return;
@@ -739,7 +739,7 @@ WIRE = r'''
       // Remember the grid's real display value so we can restore it (don't blank it).
       if (grid && this._gridDisp === undefined) this._gridDisp = grid.style.display || 'grid';
       // Truthful dual mode: evolutionary population cards for 2×2/3×3; live
-      // reduction telemetry for 4×4–11×11. Never imply the GA solves big cubes.
+      // reduction telemetry for 4×4 and larger. Never imply the GA solves big cubes.
       if ((this.n||3) > SWARM_MAX){
         this.swarmLab = null;
         if (grid) grid.style.display = 'none';
@@ -749,7 +749,7 @@ WIRE = r'''
           if (note) note.innerHTML = '<b>Unsupported cube size.</b> Return to Studio and choose a size inside this platform’s replay-verified range.';
           if (liveEl) liveEl.textContent = 'No solver is available for this size';
         } else {
-          if (note) note.innerHTML = 'For 4×4–11×11 this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop uses RCube; browser builds use Rust reduction. Both report elapsed activity and replay proof without inventing search progress.';
+          if (note) note.innerHTML = 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop uses RCube; browser builds use Rust reduction. Both report elapsed activity and replay proof without inventing search progress.';
           if (liveEl && liveEl.textContent !== 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3') liveEl.textContent = 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3';
         }
         if (msg){
@@ -925,9 +925,8 @@ WIRE = r'''
     // SOLVE_MAX_DEPTH bounds the exact 2x2 search. Kociemba handles arbitrary 3x3
     // scrambles; larger cubes scale to 20 turns per layer, matching the tested
     // deterministic-reduction scramble range.
-    // Both the native and WASM reduction paths support 4x4–11x11; WASM has a
-    // five-minute UI watchdog for its size-limited solve deadline.
-    var SOLVE_MAX_N = 11, SOLVE_MAX_DEPTH = 9,
+    // Desktop uses native RCube through 11x11; browser WASM reduction supports 21x21.
+    var SOLVE_MAX_N = nativeCore() ? 11 : 21, SOLVE_MAX_DEPTH = 9,
         SOLVE_3X3_DEPTH = 200, SCRAMBLE_TURNS_PER_LAYER = 20;
     function scrambleDepthLimit(n){
       return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : n * SCRAMBLE_TURNS_PER_LAYER;
@@ -1101,7 +1100,7 @@ WIRE = r'''
     //   • 2×2 — three real engines race (meet-in-the-middle, beam, island genetic);
     //   • 3×3 — the two-phase (Kociemba) solver, shown as one near-optimal lane with
     //           the other two hidden (they don't run for the 3×3);
-    //   • 4×4–11×11 — one reduction lane (centers → edges → 3×3 + parity).
+    //   • 4×4 and larger — one reduction lane (centers → edges → 3×3 + parity).
     function laneLabelEl(el){ return (el && el.firstElementChild) ? el.firstElementChild.children[1] : null; }
     function applyEngineLabels(self){
       var n = self.n || 3;

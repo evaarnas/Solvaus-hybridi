@@ -179,7 +179,7 @@ const limit=function(n) {{{limit_match.group('body')}}};
 const scrambleDepthLimit=limit;
 const defaultDepth=function(n) {{{default_match.group('body')}}};
 const SOLVE_MAX_DEPTH=9, SOLVE_3X3_DEPTH=200, SCRAMBLE_TURNS_PER_LAYER=20;
-for(let n=2;n<=11;n++) {{
+for(let n=2;n<=21;n++) {{
   const expected=n===2?9:n===3?200:n*20;
   if(limit(n)!==expected || defaultDepth(n)!==expected)
     throw new Error(`wrong scramble depth for ${{n}}x${{n}}: ${{limit(n)}} / ${{defaultDepth(n)}}`);
@@ -442,7 +442,7 @@ def main() -> int:
         "display:none;width:100%;height:42px",
         "Native reduction is active",
         "Progress percentages are intentionally omitted",
-        "var SOLVE_MAX_N = 11",
+        "var SOLVE_MAX_N = nativeCore() ? 11 : 21",
         "parseCustomAlgorithm",
         "applyCustomAlgorithm",
         "applyInteractiveTurn",

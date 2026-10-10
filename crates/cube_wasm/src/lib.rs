@@ -75,6 +75,16 @@ fn reduction_time_limit(n: usize) -> Duration {
     Duration::from_secs(seconds)
 }
 
+fn wasm_reduction_time_limit(n: usize) -> Duration {
+    if n <= 8 {
+        reduction_time_limit(n)
+    } else {
+        // Leave time for replay verification and result serialization under the
+        // browser's ten-minute solve watchdog.
+        Duration::from_secs(570)
+    }
+}
+
 /// A tiny deterministic RNG (xorshift64*) so scrambles are reproducible by seed
 /// without pulling OS entropy.
 struct Rng(u64);
@@ -317,8 +327,9 @@ impl CubeLab {
     fn try_reduction(&mut self) -> Option<String> {
         // Finish before the browser's worker watchdog so timeout can unwind through
         // reduction loops cleanly; worker termination remains the hard-stop backstop.
-        let control =
-            cube_solver::reduction::ReductionControl::with_timeout(reduction_time_limit(self.n));
+        let control = cube_solver::reduction::ReductionControl::with_timeout(
+            wasm_reduction_time_limit(self.n),
+        );
         self.try_reduction_with_control(&control)
     }
 
@@ -391,11 +402,9 @@ impl CubeLab {
                 return json;
             }
         }
-        // 4×4 and up: the reduction method returns a verified real solution. Capped at
-        // 11×11 — beyond that the one-time library build + solve exceed a reasonable
-        // interactive wait (12×12 ~5 min). This runs in the solver Web Worker, so even a
-        // multi-second solve never blocks the UI; larger cubes stay on the visual path.
-        const MAX_REDUCTION: usize = 11;
+        // 4×4 and up: the reduction method returns a verified real solution. The
+        // browser supports up to 21×21 with a size-aware deadline and worker watchdog.
+        const MAX_REDUCTION: usize = 21;
         if self.n > 3 && self.n <= MAX_REDUCTION {
             if let Some(json) = self.try_reduction() {
                 return json;
@@ -918,6 +927,20 @@ impl Swarm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browser_reduction_budget_is_ten_minutes_without_extending_native_budget() {
+        let test_margin = if cfg!(test) { 4 } else { 1 };
+        assert_eq!(
+            wasm_reduction_time_limit(8),
+            Duration::from_secs(115 * test_margin)
+        );
+        assert_eq!(wasm_reduction_time_limit(21), Duration::from_secs(570));
+        assert_eq!(
+            reduction_time_limit(21),
+            Duration::from_secs(290 * test_margin)
+        );
+    }
 
     #[test]
     fn sticker_state_boundary_round_trips_without_scramble_history() {
