@@ -26,6 +26,7 @@ struct SolveContext {
 };
 
 static std::mutex scrambleMutex;
+static constexpr std::uint32_t MaxCubeSize = 255;
 
 static void recordMove(void* rawContext, byte face, uint depth, int turns)
 {
@@ -75,10 +76,10 @@ extern "C" int rcube_solve(
 	*outputMoves = nullptr;
 	*outputCount = 0;
 
-	if (size < 4 || size > 101 || colors == nullptr ||
+	if (size < 4 || size > MaxCubeSize || colors == nullptr ||
 		colorCount != static_cast<std::size_t>(6) * size * size)
 	{
-		setError(error, errorCapacity, "RCube supports a complete 4x4 through 101x101 sticker state");
+		setError(error, errorCapacity, "RCube supports a complete 4x4 through 255x255 sticker state");
 		return 1;
 	}
 
@@ -173,9 +174,9 @@ extern "C" int rcube_scramble(
 	*outputMoves = nullptr;
 	*outputCount = 0;
 
-	if (size < 4 || size > 101)
+	if (size < 4 || size > MaxCubeSize)
 	{
-		setError(error, errorCapacity, "RCube supports scrambling 4x4 through 101x101");
+		setError(error, errorCapacity, "RCube supports scrambling 4x4 through 255x255");
 		return 1;
 	}
 

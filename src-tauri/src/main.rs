@@ -9,6 +9,7 @@ use std::time::Instant;
 use tauri::{ipc::Channel, State};
 
 const TEXTURE_RENDER_THRESHOLD: usize = 21;
+const MAX_NATIVE_CUBE_SIZE: usize = 255;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -96,7 +97,7 @@ fn solve_with_rcube(
     control: &NativeReductionControl,
     progress: Option<Box<dyn Fn(f64) + Send + Sync>>,
 ) -> Result<String, String> {
-    if !(4..=101).contains(&n) || colors.len() != 6 * n * n {
+    if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
 
@@ -222,7 +223,7 @@ fn solve_with_rcube(
 }
 
 fn scramble_with_rcube(n: usize, seed: i32) -> Result<String, String> {
-    if !(4..=101).contains(&n) {
+    if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) {
         return Err("invalid cube size".to_string());
     }
 
@@ -365,7 +366,7 @@ async fn solve_stickers(
     if request_token.len() < 16 || request_token.len() > 128 {
         return Err("invalid solve request token".to_string());
     }
-    if !(4..=101).contains(&n) || colors.len() != 6 * n * n {
+    if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
 
@@ -394,7 +395,7 @@ async fn solve_stickers(
 
 #[tauri::command(rename_all = "camelCase")]
 async fn scramble_rcube(n: usize, seed: i32) -> Result<String, String> {
-    if !(4..=101).contains(&n) {
+    if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) {
         return Err("invalid cube size".to_string());
     }
     tauri::async_runtime::spawn_blocking(move || scramble_with_rcube(n, seed))
@@ -508,13 +509,14 @@ mod tests {
 
     #[test]
     fn rcube_scramble_replays_and_is_seeded() {
+        assert!(scramble_with_rcube(MAX_NATIVE_CUBE_SIZE + 1, 0x5eed).is_err());
         let first = scramble_with_rcube(4, 0x5eed).unwrap();
         let second = scramble_with_rcube(4, 0x5eed).unwrap();
         let first: serde_json::Value = serde_json::from_str(&first).unwrap();
         let second: serde_json::Value = serde_json::from_str(&second).unwrap();
         assert_eq!(first, second);
 
-        for n in [4, 11, 21, 32, 64, 101] {
+        for n in [4, 11, 21, 32, 64, 101, MAX_NATIVE_CUBE_SIZE] {
             let scramble = if n == 4 {
                 first.clone()
             } else {
@@ -522,6 +524,13 @@ mod tests {
             };
             let moves = scramble["moves"].as_array().unwrap();
             assert_eq!(scramble["moveCount"].as_u64().unwrap() as usize, 27 * n);
+            if n == MAX_NATIVE_CUBE_SIZE {
+                for movement in moves {
+                    assert!(movement["layer"].as_u64().unwrap() < n as u64);
+                    assert!([-1, 1].contains(&movement["dir"].as_i64().unwrap()));
+                }
+                continue;
+            }
 
             let mut lab = cube_wasm::CubeLab::new(n);
             for movement in moves {
@@ -556,7 +565,7 @@ mod tests {
     #[test]
     #[ignore = "release-mode RCube size-scaling and replay gate"]
     fn rcube_large_cube_wide_turn_states() {
-        for n in [11, 21, 32, 51, 64, 101] {
+        for n in [11, 21, 32, 51, 64, 101, MAX_NATIVE_CUBE_SIZE] {
             let width = n / 2;
             let mut source = cube_wasm::CubeLab::new(n);
             for (axis, start, dir) in [
