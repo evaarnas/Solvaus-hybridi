@@ -113,7 +113,8 @@ button:disabled{cursor:not-allowed;opacity:.42}
             <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">CUBE SIZE</span>
             <span data-n-info style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8C887F;">3×3×3 · 26 pcs</span>
           </div>
-          <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;background:#F4F3EF;border-radius:11px;padding:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;background:#F4F3EF;border-radius:11px;padding:4px;">
+            <input data-n-input aria-label="Cube size" type="number" inputmode="numeric" min="2" max="21" step="1" style="width:54px;height:32px;border:1px solid #E4E1DA;border-radius:8px;background:#fff;color:#161514;text-align:center;font:500 13px 'JetBrains Mono',monospace;">
             <button data-dec aria-label="Decrease cube size" data-onclick="onDecN" style="width:30px;height:32px;border-radius:8px;font-size:18px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">−</button>
             <button data-inc aria-label="Increase cube size" data-onclick="onIncN" style="width:30px;height:32px;border-radius:8px;font-size:16px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">+</button>
           </div>
@@ -2473,6 +2474,8 @@ class Component extends DCLogic {
       var count=self.root.querySelector('[data-custom-count]'); if(count){ var c=self.scrambleMoveCount||0; count.textContent=c+' move'+(c===1?'':'s'); }
       var slider=self.root.querySelector('[data-nslider]');
       if(slider){ slider.min='2'; slider.max=String(SOLVE_MAX_N); slider.step='1'; slider.value=String(n); slider.disabled=blocked; }
+      var sizeInput=self.root.querySelector('[data-n-input]');
+      if(sizeInput){ sizeInput.min='2'; sizeInput.max=String(SOLVE_MAX_N); sizeInput.step='1'; sizeInput.value=String(n); sizeInput.disabled=blocked; }
       var inc=self.root.querySelector('[data-inc]'); if(inc) inc.disabled=blocked||n>=SOLVE_MAX_N;
       var dec=self.root.querySelector('[data-dec]'); if(dec) dec.disabled=blocked||n<=2;
     }
@@ -2553,6 +2556,19 @@ class Component extends DCLogic {
     }
     function wireCustomScramble(self){
       self._manualGroups=[]; self._customBaseNotation=''; self._turnAmount=1; self._refreshCustomScramble=refreshCustomScramble;
+      var sizeInput=self.root.querySelector('[data-n-input]');
+      if(sizeInput){
+        var commitSize=function(){
+          var value=sizeInput.value.trim();
+          if(!/^\d+$/.test(value)){ sizeInput.value=String(self.n); return; }
+          self.setN(self.sliderToN(Number(value)));
+          sizeInput.value=String(self.n);
+        };
+        sizeInput.addEventListener('change',commitSize);
+        sizeInput.addEventListener('keydown',function(event){
+          if(event.key==='Enter'){ event.preventDefault(); commitSize(); sizeInput.blur(); }
+        });
+      }
       var apply=self.root.querySelector('[data-alg-apply]'); if(apply) apply.addEventListener('click',function(){applyCustomAlgorithm(self);});
       var clear=self.root.querySelector('[data-alg-clear]'); if(clear) clear.addEventListener('click',function(){ var input=self.root.querySelector('[data-alg-input]');if(input)input.value='';setCustomError(self,'');self.resetSolved(); });
       var input=self.root.querySelector('[data-alg-input]'); if(input) input.addEventListener('keydown',function(e){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();applyCustomAlgorithm(self);}});
@@ -2776,7 +2792,7 @@ class Component extends DCLogic {
     inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
     const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
     inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
-    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
+    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-n-input],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
     inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=true;el.setAttribute('aria-disabled','true');});
     blocked();
     return {

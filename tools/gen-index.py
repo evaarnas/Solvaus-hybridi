@@ -1169,6 +1169,8 @@ WIRE = r'''
       var count=self.root.querySelector('[data-custom-count]'); if(count){ var c=self.scrambleMoveCount||0; count.textContent=c+' move'+(c===1?'':'s'); }
       var slider=self.root.querySelector('[data-nslider]');
       if(slider){ slider.min='2'; slider.max=String(SOLVE_MAX_N); slider.step='1'; slider.value=String(n); slider.disabled=blocked; }
+      var sizeInput=self.root.querySelector('[data-n-input]');
+      if(sizeInput){ sizeInput.min='2'; sizeInput.max=String(SOLVE_MAX_N); sizeInput.step='1'; sizeInput.value=String(n); sizeInput.disabled=blocked; }
       var inc=self.root.querySelector('[data-inc]'); if(inc) inc.disabled=blocked||n>=SOLVE_MAX_N;
       var dec=self.root.querySelector('[data-dec]'); if(dec) dec.disabled=blocked||n<=2;
     }
@@ -1249,6 +1251,19 @@ WIRE = r'''
     }
     function wireCustomScramble(self){
       self._manualGroups=[]; self._customBaseNotation=''; self._turnAmount=1; self._refreshCustomScramble=refreshCustomScramble;
+      var sizeInput=self.root.querySelector('[data-n-input]');
+      if(sizeInput){
+        var commitSize=function(){
+          var value=sizeInput.value.trim();
+          if(!/^\d+$/.test(value)){ sizeInput.value=String(self.n); return; }
+          self.setN(self.sliderToN(Number(value)));
+          sizeInput.value=String(self.n);
+        };
+        sizeInput.addEventListener('change',commitSize);
+        sizeInput.addEventListener('keydown',function(event){
+          if(event.key==='Enter'){ event.preventDefault(); commitSize(); sizeInput.blur(); }
+        });
+      }
       var apply=self.root.querySelector('[data-alg-apply]'); if(apply) apply.addEventListener('click',function(){applyCustomAlgorithm(self);});
       var clear=self.root.querySelector('[data-alg-clear]'); if(clear) clear.addEventListener('click',function(){ var input=self.root.querySelector('[data-alg-input]');if(input)input.value='';setCustomError(self,'');self.resetSolved(); });
       var input=self.root.querySelector('[data-alg-input]'); if(input) input.addEventListener('keydown',function(e){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();applyCustomAlgorithm(self);}});
@@ -1473,7 +1488,7 @@ BOOT = r'''
     inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
     const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
     inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
-    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
+    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-n-input],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
     inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=true;el.setAttribute('aria-disabled','true');});
     blocked();
     return {

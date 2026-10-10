@@ -32,10 +32,13 @@ class AuditParser(HTMLParser):
         self.roles: list[tuple[str, dict[str, str]]] = []
         self.external_resources: list[str] = []
         self.tag_counts: dict[str, int] = {}
+        self.inputs: list[dict[str, str]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         values = {key: value or "" for key, value in attrs}
         self.tag_counts[tag] = self.tag_counts.get(tag, 0) + 1
+        if tag == "input":
+            self.inputs.append(values)
         if values.get("id"):
             self.ids.add(values["id"])
         if values.get("role"):
@@ -413,6 +416,10 @@ def main() -> int:
     require(not parser.external_resources, f"desktop UI must be offline-only: {parser.external_resources}")
     require({"studio-tab", "swarm-tab", "studio-panel", "swarm-panel"} <= parser.ids, "tab IDs/panels missing")
     require({"custom-algorithm", "custom-algorithm-help", "custom-algorithm-error"} <= parser.ids, "custom scramble controls missing")
+    require(any(
+        attrs.get("data-n-input") is not None and attrs.get("type") == "number" and attrs.get("aria-label") == "Cube size"
+        for attrs in parser.inputs
+    ), "direct cube-size number field missing or inaccessible")
 
     tabs = [attrs for role, attrs in parser.roles if role == "tab"]
     require(len(tabs) == 2, "Studio and Swarm must expose exactly two ARIA tabs")
@@ -458,6 +465,9 @@ def main() -> int:
         "self.RENDER_CUBIE_MAX=Math.min(SOLVE_MAX_N,21);",
         "this.mode = N <= (this.RENDER_CUBIE_MAX || this.CUBIE_MAX || 11) ? 'cubie' : 'texture';",
         "slider.max=String(SOLVE_MAX_N)",
+        "data-n-input",
+        "sizeInput.addEventListener('change',commitSize)",
+        "self.setN(self.sliderToN(Number(value)))",
         "return n > (self.RENDER_CUBIE_MAX || self.CUBIE_MAX || 11)",
         "function syncTextureFromLab(self)",
         "res.solvedByRcube&&res.compactMoves&&self.mode==='texture'&&self.n>21",
