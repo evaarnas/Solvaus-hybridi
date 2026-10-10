@@ -419,6 +419,7 @@ WIRE = r'''
       // Reduction grows quickly with N. Keep a watchdog, but size it from measured
       // release behavior so a valid 9×9–11×11 solve is not killed at eight seconds.
       var _sw = this;
+      // The WASM reduction solver has a 290-second deadline for 9×9–11×11.
       var watchdogMs = this.n <= 3 ? 8000 : this.n <= 5 ? 30000 : this.n <= 8 ? 120000 : 300000;
       clearTimeout(this._solveWatchdog);
       this._solveWatchdog = setTimeout(function(){
@@ -924,8 +925,9 @@ WIRE = r'''
     // SOLVE_MAX_DEPTH bounds the exact 2x2 search. Kociemba handles arbitrary 3x3
     // scrambles; larger cubes scale to 20 turns per layer, matching the tested
     // deterministic-reduction scramble range.
-    // The standalone browser build stays at the WASM-runtime-verified 5x5 ceiling.
-    var SOLVE_MAX_N = nativeCore() ? 11 : 5, SOLVE_MAX_DEPTH = 9,
+    // Both the native and WASM reduction paths support 4x4–11x11; WASM has a
+    // five-minute UI watchdog for its size-limited solve deadline.
+    var SOLVE_MAX_N = 11, SOLVE_MAX_DEPTH = 9,
         SOLVE_3X3_DEPTH = 200, SCRAMBLE_TURNS_PER_LAYER = 20;
     function scrambleDepthLimit(n){
       return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : n * SCRAMBLE_TURNS_PER_LAYER;

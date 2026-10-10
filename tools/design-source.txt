@@ -132,7 +132,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
             <input data-nslider aria-label="Cube size" type="range" min="2" max="11" step="1" onChange="{{ onNSlider }}" style="flex:1;accent-color:#161514;height:4px;cursor:pointer;">
             <span data-nval style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#161514;min-width:64px;text-align:right;">3×3</span>
           </div>
-          <div data-size-note style="font-size:11px;color:#66635C;margin-top:9px;line-height:1.45;">Only replay-verified sizes are available. This desktop build solves 2×2 through 11×11.</div>
+          <div data-size-note style="font-size:11px;color:#66635C;margin-top:9px;line-height:1.45;">Only replay-verified sizes are available. This build solves 2×2 through 11×11; large browser solves may take several minutes.</div>
 
           <div style="height:1px;background:#F1EFEA;margin:16px 0;"></div>
 

@@ -442,7 +442,7 @@ def main() -> int:
         "display:none;width:100%;height:42px",
         "Native reduction is active",
         "Progress percentages are intentionally omitted",
-        "nativeCore() ? 11 : 5",
+        "var SOLVE_MAX_N = 11",
         "parseCustomAlgorithm",
         "applyCustomAlgorithm",
         "applyInteractiveTurn",
