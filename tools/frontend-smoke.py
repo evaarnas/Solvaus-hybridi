@@ -470,6 +470,7 @@ def main() -> int:
         "this.renderTextureFromLab();",
         "self.lab.reset();",
         "this._textureDrawBucket = drawBucket;",
+        "Math.floor(frac * Math.min(this.totalMoves, 120))",
         "const d = Math.min(N, 48);",
         "parseCustomAlgorithm",
         "applyCustomAlgorithm",

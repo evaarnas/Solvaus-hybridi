@@ -713,7 +713,7 @@ class Component extends DCLogic {
         if (!this._textureReplayTurnsLeft) this._textureReplayIndex++;
       }
       const frac = this.totalMoves ? this.movesDone / this.totalMoves : 1;
-      const drawBucket = Math.floor(frac * 60);
+      const drawBucket = Math.floor(frac * Math.min(this.totalMoves, 120));
       if (this.movesDone !== initialMovesDone &&
           (drawBucket !== this._textureDrawBucket || this.movesDone >= this.totalMoves)) {
         this._textureDrawBucket = drawBucket;
