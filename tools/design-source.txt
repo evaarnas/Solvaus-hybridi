@@ -610,7 +610,7 @@ class Component extends DCLogic {
   buildTextureCube(N) {
     const T = window.THREE;
     const total = 2.5;
-    const d = Math.min(N, 96);
+    const d = Math.min(N, 48);
     const solvedIdx = [5, 4, 0, 1, 2, 3]; // px,nx,py,ny,pz,nz -> r,o,w,y,g,b
     this.texFaces = [];
     const mats = [];
@@ -656,13 +656,80 @@ class Component extends DCLogic {
     face.tex.needsUpdate = true;
   }
 
+  renderTextureFromLab() {
+    if (!this.lab || !this.texFaces || this.texFaces.length !== 6) return;
+    const d = this.texFaces[0].d, sourceFace = [5, 4, 0, 1, 2, 3];
+    const colors = Array.from(this.lab.face_colors(d)), area = d * d;
+    if (colors.length !== 6 * area) throw new Error('invalid sticker buffer for texture display');
+    this.texFaces.forEach((face, index) => {
+      const offset = sourceFace[index] * area;
+      face.scr = colors.slice(offset, offset + area).map(color => {
+        if (!Number.isInteger(color) || color < 0 || color >= this.faceList.length) {
+          throw new Error('invalid sticker color for texture display');
+        }
+        return this.faceList[color];
+      });
+    });
+  }
+
   advanceTexture(dt) {
     const speedK = 0.52 / this.speedDur;
     const dur = (this.phase === 'scrambling' ? 1.3 : 2.8) / speedK;
     this.texProg = Math.min(1, this.texProg + dt / dur);
     const solving = this.phase === 'solving';
+    if (solving && this._textureReplayMoves) {
+      const estimated = Math.max(1, this.totalMoves);
+      const target = Math.min(estimated, Math.floor(this.texProg * estimated));
+      const started = performance.now();
+      const initialMovesDone = this.movesDone;
+      while (this.movesDone < target && performance.now() - started < 5) {
+        const move = this._textureReplayMoves[this._textureReplayIndex];
+        if (!move) break;
+        if (!this._textureReplayTurnsLeft) {
+          const amount = ((move.turns % 4) + 4) % 4;
+          if (amount === 0) {
+            this._textureReplayIndex++;
+            continue;
+          }
+          this._textureReplayTurnsLeft = amount === 2 ? 2 : 1;
+          this._textureReplayDirection = amount === 3 ? -1 : 1;
+        }
+        this.lab.apply_design_move(move.axis, move.layer, this._textureReplayDirection);
+        this.movesDone++;
+        this._textureReplayTurnsLeft--;
+        if (!this._textureReplayTurnsLeft) this._textureReplayIndex++;
+      }
+      const frac = this.totalMoves ? this.movesDone / this.totalMoves : 1;
+      const drawBucket = Math.floor(frac * 60);
+      if (this.movesDone !== initialMovesDone &&
+          (drawBucket !== this._textureDrawBucket || this.movesDone >= this.totalMoves)) {
+        this._textureDrawBucket = drawBucket;
+        this.renderTextureFromLab();
+        for (let f = 0; f < 6; f++) this.drawFace(f, 0);
+      }
+      this.setSolvedPct(frac);
+      this.ui.count.textContent = `${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}`;
+      this.ui.move.style.display = 'none';
+      const verifiedLane = this.lanes.det;
+      if (verifiedLane) {
+        verifiedLane.fill.style.width = '100%';
+        verifiedLane.pct.textContent = '100%';
+        verifiedLane.pct.style.color = '#1BA64B';
+        verifiedLane.stat.textContent = `verified · replay ${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}`;
+        verifiedLane.star.style.display = 'inline';
+      }
+      this.ui.status.textContent = 'Replaying verified RCube solution';
+      if (this._textureReplayIndex >= this._textureReplayMoves.length &&
+          this.movesDone >= this.totalMoves) this.onPhaseComplete();
+      return;
+    }
     const frac = solving ? this.texProg : (1 - this.texProg);
-    for (let f = 0; f < 6; f++) this.drawFace(f, frac);
+    // Redraw the sticker canvases in 5% snapshots instead of rebuilding every tile per frame.
+    const drawBucket = Math.floor(this.texProg * 20);
+    if (drawBucket !== this._textureDrawBucket || this.texProg >= 1) {
+      this._textureDrawBucket = drawBucket;
+      for (let f = 0; f < 6; f++) this.drawFace(f, frac);
+    }
     const est = this.totalMoves || 1;
     this.movesDone = Math.floor(this.texProg * est);
     this.setSolvedPct(frac);
@@ -676,15 +743,23 @@ class Component extends DCLogic {
   scrambleTexture() {
     this.texFaces.forEach(face => { for (let i = 0; i < face.d * face.d; i++) face.scr[i] = this.faceList[Math.floor(Math.random() * 6)]; });
     this.phase = 'scrambling'; this.busy = true; this.scrambled = true;
-    this.texProg = 0; this.totalMoves = Math.round(0.35 * this.N * this.N); this.movesDone = 0;
+    this.texProg = 0; this._textureDrawBucket = -1;
+    this.totalMoves = Math.round(0.35 * this.N * this.N); this.movesDone = 0;
     this.resetLanes();
     this.ui.count.style.display = 'inline-block';
     this.syncControls();
   }
 
   solveTexture() {
-    this.phase = 'solving'; this.busy = true; this.texProg = 0;
-    this.totalMoves = Math.round(0.35 * this.N * this.N); this.movesDone = 0;
+    this.phase = 'solving'; this.busy = true; this.texProg = 0; this._textureDrawBucket = -1;
+    this.totalMoves = this._textureReplayMoves
+      ? this._textureReplayMoves.reduce((total, move) => {
+          const amount = ((move.turns % 4) + 4) % 4;
+          return total + (amount === 2 ? 2 : amount === 0 ? 0 : 1);
+        }, 0)
+      : Number(this.realMoveCount) || Math.round(0.35 * this.N * this.N);
+    this.movesDone = 0;
+    this._textureReplayIndex = 0; this._textureReplayTurnsLeft = 0;
     this.startLanes();
     this.ui.count.style.display = 'inline-block';
     this.syncControls();
@@ -863,12 +938,20 @@ class Component extends DCLogic {
       this.setSolvedPct(this.mode === 'texture' ? 0 : 0.04);
       this.ui.count.style.display = 'none';
     } else if (this.phase === 'solving') {
+      if (this._textureReplayMoves && this.lab && !this.lab.is_solved()) {
+        this.phase = 'idle'; this.busy = false;
+        this.ui.status.textContent = 'Verified replay failed — cube state mismatch';
+        this.ui.count.style.display = 'none';
+        this.syncControls();
+        return;
+      }
       this.phase = 'idle'; this.busy = false; this.scrambled = false; this.hasSolution = true;
       this.setSolvedPct(1);
       this.ui.status.textContent = 'Solved ✓';
       this.ui.count.style.display = 'none';
       this.finishLanes();
       this.showSolution();
+      this._textureReplayMoves = null;
     }
     this.syncControls();
   }
@@ -940,7 +1023,7 @@ class Component extends DCLogic {
   finishLanes() {
     const small = this.n <= 4;
     const winner = small ? 'det' : 'evo';
-    const moves = this.lastSolution.length;
+    const moves = this.realMoveCount || this.lastSolution.length;
     Object.entries(this.lanes).forEach(([k, l]) => {
       if (k === winner) {
         l.fill.style.width = '100%'; l.pct.textContent = '100%'; l.pct.style.color = '#1BA64B';
@@ -955,8 +1038,9 @@ class Component extends DCLogic {
 
   showSolution() {
     if (this.mode === 'texture') {
-      this.ui.solCount.textContent = this.totalMoves.toLocaleString();
-      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">Reduction method — centers → edge pairing → reduced 3×3 + parity. ≈' + this.totalMoves.toLocaleString() + ' moves (O(N²)), too many to list.</span>';
+      const moveCount = this.realMoveCount || this.totalMoves;
+      this.ui.solCount.textContent = moveCount.toLocaleString();
+      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + ' verified moves replayed on the cube.</span>';
       return;
     }
     const moves = this.lastSolution;

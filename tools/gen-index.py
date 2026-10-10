@@ -101,8 +101,20 @@ WIRE = r'''
       if (this._refreshCustomScramble) this._refreshCustomScramble(this);
     };
     inst.replay = function(){
-      if (this.busy||this._solvePending||!this.lastScramble.length||!this.lastSolution.length) return;
+      if (this.busy||this._solvePending||!this.lastScramble.length||
+          (!this.lastSolution.length && !(this.mode==='texture'&&this.hasSolution))) return;
       if (!rebuildFromScrambleHistory(this)) return;
+      if (this.mode==='texture'){
+        this.scrambled=true;
+        if (this.realWinner==='rcube'&&this.lastSolution&&this.lastSolution.length){
+          this._textureReplayMoves=this.lastSolution.map(function(m){
+            return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
+          });
+        }
+        this.solveTexture();
+        if(this.ui&&this.ui.status)this.ui.status.textContent='Replaying verified solution';
+        return;
+      }
       // Keep the Rust-side state at the replay target while the visible cube animates.
       this.lastSolution.forEach((function(m){ this.lab.apply_design_move(m.axis,m.layer,m.dir); }).bind(this));
       if (!this.lab.is_solved()){ if(this.ui&&this.ui.status)this.ui.status.textContent='Replay verification failed'; return; }
@@ -226,17 +238,8 @@ WIRE = r'''
 
     function syncTextureFromLab(self){
       if (!self.lab||!self.texFaces||self.texFaces.length!==6) return;
-      const d=self.texFaces[0].d, sourceFace=[5,4,0,1,2,3];
-      const colors=Array.from(self.lab.face_colors(d)), area=d*d;
-      if (colors.length!==6*area) throw new Error('invalid sticker buffer for texture display');
-      self.texFaces.forEach(function(face,index){
-        const offset=sourceFace[index]*area;
-        face.scr=colors.slice(offset,offset+area).map(function(color){
-          if (!Number.isInteger(color)||color<0||color>=self.faceList.length) throw new Error('invalid sticker color for texture display');
-          return self.faceList[color];
-        });
-        self.drawFace(index,0);
-      });
+      self.renderTextureFromLab();
+      for (var i=0;i<6;i++) self.drawFace(i,0);
     }
 
     inst.scramble = function(){
@@ -387,6 +390,10 @@ WIRE = r'''
         try { if (navigator.clipboard) navigator.clipboard.writeText(txt); } catch (e) {}
         var btn = this.q && this.q('[data-copy]');
         if (btn){ var o = btn.innerHTML; btn.innerHTML = '<span style="font-size:12px;color:#1BA64B;">Copied ✓</span>'; setTimeout(function(){ btn.innerHTML = o; }, 1400); }
+        return;
+      }
+      if (this.mode==='texture'&&this.realWinner==='rcube'&&this.hasSolution){
+        if(this.ui&&this.ui.status)this.ui.status.textContent='The verified move sequence was replayed; notation is omitted for this large cube.';
         return;
       }
       return origCopyPath();
@@ -640,6 +647,7 @@ WIRE = r'''
       showCancel(self, false);
       var res = null;
       if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
+      var compactNativeTextureResult=!!(res&&res.verified&&res.compactMoves&&self.mode==='texture'&&self.n>21);
       if (!res || !res.found || !res.moves || !res.moves.length){
         self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
@@ -649,12 +657,16 @@ WIRE = r'''
         if (self.syncControls) self.syncControls();
         return;
       }
-      // Keep the authoritative Rust-side state synchronized with the visible
-      // replay target. Controls remain locked while the mesh catches up.
+      // Compact texture results carry single-slice operations; native replay
+      // verification allows accepting them without blocking the UI thread.
       var targetVerified=false;
       try {
-        res.moves.forEach(function(m){ self.lab.apply_design_move(m.axis,m.layer,m.dir); });
-        targetVerified=self.lab.is_solved();
+        if (compactNativeTextureResult){
+          targetVerified=res.verified===true;
+        } else {
+          res.moves.forEach(function(m){ self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+          targetVerified=self.lab.is_solved();
+        }
       } catch(e){}
       if (!targetVerified){
         rebuildFromScrambleHistory(self);
@@ -662,6 +674,30 @@ WIRE = r'''
         if(self.ui&&self.ui.status)self.ui.status.textContent='Solver result rejected — active state mismatch';
         if(self.syncControls)self.syncControls();
         return;
+      }
+      var textureReplayMoves = null;
+      if (self.mode === 'texture') {
+        textureReplayMoves = res.moves.map(function(m){
+          return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
+        });
+        var validTexturePath=textureReplayMoves.every(function(m){
+          return Number.isInteger(m.axis)&&m.axis>=0&&m.axis<=2&&
+            Number.isInteger(m.layer)&&m.layer>=0&&m.layer<self.n&&
+            Number.isInteger(m.turns)&&[-2,-1,1,2].indexOf(m.turns)>=0;
+        });
+        if(!validTexturePath){
+          rebuildFromScrambleHistory(self);
+          self._lastSolveTelemetry={n:self.n,elapsedMs:elapsedMs,verified:false,error:'RCube returned an invalid replay path'};
+          if(self.ui&&self.ui.status)self.ui.status.textContent='Solver result rejected — invalid replay path';
+          if(self.syncControls)self.syncControls();
+          return;
+        }
+        if(!compactNativeTextureResult&&!rebuildFromScrambleHistory(self)){
+          self._lastSolveTelemetry={n:self.n,elapsedMs:elapsedMs,verified:false,error:'Could not restore the texture cube before replay'};
+          if(self.ui&&self.ui.status)self.ui.status.textContent='Solver result rejected — could not restore cube for replay';
+          if(self.syncControls)self.syncControls();
+          return;
+        }
       }
       self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:true, moveCount:res.moveCount, winner:res.winner };
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
@@ -672,8 +708,21 @@ WIRE = r'''
       self.realMoveCount = res.moveCount;
       self.realNotation = res.notation || null;
       updateProof(self, self.scrambleMoveCount || (self.lastScramble||[]).length, res.moveCount);
-      self.queue = res.moves.slice();   // fill the queue BEFORE claiming busy
-      self.movesDone = 0; self.totalMoves = self.queue.length;
+      self.queue = self.mode === 'texture' ? [] : res.moves.slice();   // fill the queue BEFORE claiming busy
+      self.movesDone = 0;
+      if (self.mode === 'texture') {
+        self._textureReplayMoves = textureReplayMoves;
+        self._textureReplayIndex = 0;
+        self._textureReplayTurnsLeft = 0;
+        self.totalMoves = textureReplayMoves.reduce(function(total, m){
+          var amount=((m.turns%4)+4)%4;
+          return total+(amount===2?2:amount===0?0:1);
+        },0);
+        self.texProg = 0;
+        self._textureDrawBucket = -1;
+      } else {
+        self.totalMoves = self.queue.length;
+      }
       self.phase = 'solving'; self.busy = true;
       if (self.ui && self.ui.status) self.ui.status.textContent = 'Verified in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
@@ -690,6 +739,9 @@ WIRE = r'''
       self.activeMove = null;
       self.queue = []; self.movesDone = 0; self.totalMoves = 0;
       self.phase = 'idle'; self.busy = false;
+      self._textureReplayMoves = null;
+      self._textureReplayIndex = 0;
+      self._textureReplayTurnsLeft = 0;
       // Rebuild both representations from the same history; a half-played
       // solution must never leave the mesh and Rust cube on different states.
       try { rebuildFromScrambleHistory(self); } catch(e){}

@@ -8,6 +8,8 @@ use std::sync::Mutex;
 use std::time::Instant;
 use tauri::State;
 
+const TEXTURE_RENDER_THRESHOLD: usize = 21;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct RcubeMove {
@@ -132,13 +134,17 @@ fn solve_with_rcube(
     let size = CubeSize::new(n).map_err(|error| error.to_string())?;
     let mut moves = Vec::new();
     let mut notation = Vec::with_capacity(engine_moves.len());
+    let mut move_count = 0usize;
     for engine_move in engine_moves {
         let movement = rcube_move_to_core(engine_move, n)?;
         if movement.is_noop() {
             continue;
         }
 
-        notation.push(movement.notation(size));
+        move_count += 1;
+        if n <= TEXTURE_RENDER_THRESHOLD {
+            notation.push(movement.notation(size));
+        }
         let axis = match movement.axis {
             Axis::X => 0,
             Axis::Y => 1,
@@ -152,10 +158,25 @@ fn solve_with_rcube(
         };
         for _ in 0..quarter_turns {
             replay.apply_design_move(axis, movement.layer_start, direction);
+            if n <= TEXTURE_RENDER_THRESHOLD {
+                moves.push(serde_json::json!({
+                    "axis": axis,
+                    "layer": movement.layer_start,
+                    "dir": direction
+                }));
+            }
+        }
+        if n > TEXTURE_RENDER_THRESHOLD {
+            let compact_turns = match movement.turns.rem_euclid(4) {
+                1 => 1,
+                2 => 2,
+                3 => -1,
+                _ => 0,
+            };
             moves.push(serde_json::json!({
                 "axis": axis,
                 "layer": movement.layer_start,
-                "dir": direction
+                "turns": compact_turns
             }));
         }
     }
@@ -164,9 +185,10 @@ fn solve_with_rcube(
         return Err("RCube solution failed independent replay verification".to_string());
     }
 
-    let move_count = notation.len();
     Ok(serde_json::json!({
         "found": true,
+        "verified": true,
+        "compactMoves": n > TEXTURE_RENDER_THRESHOLD,
         "winner": "rcube",
         "moveCount": move_count,
         "elapsedMs": started.elapsed().as_millis(),
@@ -390,6 +412,50 @@ mod tests {
             result["moveCount"].as_u64().unwrap() as usize,
             result["notation"].as_array().unwrap().len()
         );
+    }
+
+    #[test]
+    fn rcube_texture_solution_replays_compact_move_list() {
+        let n = TEXTURE_RENDER_THRESHOLD + 1;
+        let mut source = cube_wasm::CubeLab::new(n);
+        for (axis, start, dir) in [
+            (0, 0, 1),
+            (1, n / 2, -1),
+            (2, 0, 1),
+            (0, n / 2, -1),
+            (1, 0, 1),
+            (2, n / 2, -1),
+        ] {
+            for layer in start..start + n / 2 {
+                source.apply_design_move(axis, layer, dir);
+            }
+        }
+        let colors = source.face_colors(n);
+        let control = cube_wasm::native_reduction_control(n);
+        let result = solve_with_rcube(n, &colors, &control).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(result["verified"], true);
+        assert_eq!(result["compactMoves"], true);
+        assert!(!result["moves"].as_array().unwrap().is_empty());
+        assert!(result["moveCount"].as_u64().unwrap() > 0);
+
+        let mut replay = cube_wasm::CubeLab::new(n);
+        assert!(replay.load_face_colors(&colors));
+        for movement in result["moves"].as_array().unwrap() {
+            let axis = movement["axis"].as_u64().unwrap() as u8;
+            let layer = movement["layer"].as_u64().unwrap() as usize;
+            let turns = movement["turns"].as_i64().unwrap() as i32;
+            let (count, dir) = match turns.rem_euclid(4) {
+                1 => (1, 1),
+                2 => (2, 1),
+                3 => (1, -1),
+                _ => (0, 1),
+            };
+            for _ in 0..count {
+                replay.apply_design_move(axis, layer, dir);
+            }
+        }
+        assert!(replay.is_solved());
     }
 
     #[test]
