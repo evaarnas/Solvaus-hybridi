@@ -433,7 +433,6 @@ def main() -> int:
         "core.invoke('solve_stickers'",
         "invoke('cancel_solve'",
         "requestToken:requestToken",
-        "Number(v) > SOLVE_MAX_N",
         "data-reduction-elapsed aria-hidden",
         "data-reduction-start",
         "data-reduction-cancel",
@@ -473,6 +472,7 @@ def main() -> int:
     require("Math.round(np.x / this.step)" not in module, "even-N cubies must never snap to the integer-origin lattice")
     require("visualization-only" not in html.lower(), "visualization-only product mode must not return")
     require("Playing visual demo" not in html, "unsearched visual solve must not return")
+    require("data-n=" not in html, "fixed cube-size preset buttons must stay removed")
     require('data-n="20"' not in html and 'max="1000"' not in html and "Math.pow(50000" not in html, "unsupported size controls must not return")
     require("inst.scrambleDepth = 200;" in module, "default 3x3 scramble depth must provide a full-length scramble")
     require("SOLVE_3X3_DEPTH = 200" in module, "3x3 scramble depth must support 200 turns")

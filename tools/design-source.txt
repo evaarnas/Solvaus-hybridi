@@ -113,19 +113,9 @@ button:disabled{cursor:not-allowed;opacity:.42}
             <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">CUBE SIZE</span>
             <span data-n-info style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8C887F;">3×3×3 · 26 pcs</span>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <div style="display:flex;gap:6px;flex:1;">
-              <button data-n="2" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">2</button>
-              <button data-n="3" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">3</button>
-              <button data-n="4" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">4</button>
-              <button data-n="5" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">5</button>
-              <button data-n="7" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">7</button>
-              <button data-n="11" onClick="{{ onNClick }}" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">11</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;background:#F4F3EF;border-radius:11px;padding:4px;">
-              <button data-dec onClick="{{ onDecN }}" style="width:30px;height:32px;border-radius:8px;font-size:18px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">−</button>
-              <button data-inc onClick="{{ onIncN }}" style="width:30px;height:32px;border-radius:8px;font-size:16px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">+</button>
-            </div>
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;background:#F4F3EF;border-radius:11px;padding:4px;">
+            <button data-dec aria-label="Decrease cube size" onClick="{{ onDecN }}" style="width:30px;height:32px;border-radius:8px;font-size:18px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">−</button>
+            <button data-inc aria-label="Increase cube size" onClick="{{ onIncN }}" style="width:30px;height:32px;border-radius:8px;font-size:16px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">+</button>
           </div>
 
           <div style="display:flex;align-items:center;gap:11px;margin-top:13px;">
@@ -324,7 +314,6 @@ class Component extends DCLogic {
     return {
       rootRef: (el) => { if (el) this.root = el; },
       onViewClick: (e) => this.setView(e.currentTarget.dataset.view),
-      onNClick: (e) => this.setN(parseInt(e.currentTarget.dataset.n, 10)),
       onIncN: () => this.setN(this.n + 1),
       onDecN: () => this.setN(this.n - 1),
       onScramble: () => this.scramble(),
@@ -1033,13 +1022,6 @@ class Component extends DCLogic {
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     });
-    // N presets
-    this.qa('[data-n]').forEach(b => {
-      const on = parseInt(b.dataset.n, 10) === this.n;
-      b.style.background = on ? '#161514' : '#F4F3EF';
-      b.style.color = on ? '#fff' : '#6E6A61';
-      b.setAttribute('aria-pressed', String(on));
-    });
     const nsl = this.q('[data-nslider]'); if (nsl) nsl.value = this.nToSlider(this.n);
     const nv = this.q('[data-nval]'); if (nv) nv.textContent = `${this.n}×${this.n}`;
     // speed
@@ -1081,7 +1063,7 @@ class Component extends DCLogic {
     dis(this.q('[data-act-solve]'), this.busy || !this.scrambled);
     dis(this.q('[data-act-replay]'), this.busy || this.lastScramble.length === 0);
     dis(this.q('[data-act-reset]'), this.busy);
-    this.qa('[data-n],[data-inc],[data-dec]').forEach(b => dis(b, this.busy));
+    this.qa('[data-inc],[data-dec]').forEach(b => dis(b, this.busy));
   }
 
   // =================== SWARM ===================

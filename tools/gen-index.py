@@ -1047,10 +1047,6 @@ WIRE = r'''
       self.CUBIE_MAX=SOLVE_MAX_N;
       self.sliderToN=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
       self.nToSlider=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
-      self.root.querySelectorAll('[data-n]').forEach(function(button){
-        var supported=Number(button.dataset.n)<=SOLVE_MAX_N; button.style.display=supported?'':'none';
-        if (supported) button.title='Runs a replay-verified solver';
-      });
       var note=self.root.querySelector('[data-size-note]');
       if(note) note.innerHTML='Only replay-verified sizes are offered. <b>'+(nativeCore()?'Desktop':'Browser')+': 2×2–'+SOLVE_MAX_N+'×'+SOLVE_MAX_N+'.</b> Larger cubes are hidden because their runtime and memory costs are not yet reliable enough for a product promise.';
       if (self.n>SOLVE_MAX_N) self.setN(SOLVE_MAX_N);
@@ -1201,15 +1197,6 @@ WIRE = r'''
         cb.addEventListener('click', function(){ cancelSolve(self); });
         solveBtn.parentNode.insertBefore(cb, solveBtn.nextSibling);
       }
-      ['2','3','4','5','7','11'].forEach(function(v){
-        var b = self.root.querySelector('[data-n="'+v+'"]');
-        if(!b) return;
-        if(Number(v) > SOLVE_MAX_N){
-          b.style.display='none';
-        } else {
-          b.style.opacity='1'; b.title='Runs the real replay-verified solver';
-        }
-      });
       var sd2 = self.root.querySelector('[data-scramble]');
       if (sd2) sd2.addEventListener('input', function(){ setTimeout(function(){ refreshSolvability(self); }, 0); });
       refreshSolvability(self);
@@ -1290,7 +1277,7 @@ BOOT = r'''
     inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
     const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
     inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
-    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-n],[data-inc],[data-dec],[data-nslider],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
+    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
     inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=true;el.setAttribute('aria-disabled','true');});
     blocked();
     return {
