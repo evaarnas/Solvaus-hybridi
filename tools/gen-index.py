@@ -319,7 +319,7 @@ WIRE = r'''
       return globalThis.__TAURI__ && globalThis.__TAURI__.core && globalThis.__TAURI__.core.invoke
         ? globalThis.__TAURI__.core : null;
     }
-    function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= 11; }
+    function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= 101; }
     function solveRequestToken(){
       if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') return globalThis.crypto.randomUUID();
       var parts=[]; for(var i=0;i<4;i++) parts.push(secureBelow(0x100000000).toString(16).padStart(8,'0'));
@@ -925,8 +925,8 @@ WIRE = r'''
     // SOLVE_MAX_DEPTH bounds the exact 2x2 search. Kociemba handles arbitrary 3x3
     // scrambles; larger cubes scale to 20 turns per layer, matching the tested
     // deterministic-reduction scramble range.
-    // Desktop uses native RCube through 11x11; browser WASM reduction supports 21x21.
-    var SOLVE_MAX_N = nativeCore() ? 11 : 21, SOLVE_MAX_DEPTH = 9,
+    // Native RCube supports cubes through 101x101; browser WASM through 21x21.
+    var SOLVE_MAX_N = nativeCore() ? 101 : 21, SOLVE_MAX_DEPTH = 9,
         SOLVE_3X3_DEPTH = 200, SCRAMBLE_TURNS_PER_LAYER = 20;
     function scrambleDepthLimit(n){
       return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : n * SCRAMBLE_TURNS_PER_LAYER;

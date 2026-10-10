@@ -5,9 +5,9 @@ The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired
 ## Supported sizes
 
 - **Standalone browser:** 2×2–21×21
-- **Tauri desktop:** 2×2–11×11
+- **Tauri desktop:** 2×2–101×101
 
-Unsupported sizes are not exposed. Browser 9×9–21×21 reductions have a 570-second solver deadline and ten-minute UI watchdog; they can be cancelled, and a successful result is independently replay-verified. Solve time and move count depend on the state and device.
+Unsupported sizes are not exposed. Browser 9×9–21×21 reductions have a 570-second solver deadline and ten-minute UI watchdog; desktop solves have a five-minute watchdog and a 101×101 maximum. Cubes larger than 21×21 use the texture-based renderer. Solves can be cancelled, and successful results are independently replay-verified. Solve time and move count depend on the state and device.
 
 ## Run in a browser
 
@@ -29,7 +29,7 @@ Open <http://localhost:8000>. ES modules and WebAssembly do not work through a d
 ## Solver routing
 
 - 2×2/3×3 and standalone-browser 4×4–21×21 run in `solver-worker.js`.
-- Tauri desktop 4×4–11×11 uses native `solve_stickers` / `cancel_solve` commands.
+- Tauri desktop 4×4–101×101 uses native `solve_stickers` / `cancel_solve` commands.
 - Studio solve requests contain the complete sticker-color state—not scramble history.
 - Returned moves are accepted only after independent replay reaches solved.
 

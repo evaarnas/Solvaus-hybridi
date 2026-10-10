@@ -58,10 +58,10 @@ extern "C" int rcube_solve(
 	*outputMoves = nullptr;
 	*outputCount = 0;
 
-	if (size < 4 || size > 11 || colors == nullptr ||
+	if (size < 4 || size > 101 || colors == nullptr ||
 		colorCount != static_cast<std::size_t>(6) * size * size)
 	{
-		setError(error, errorCapacity, "RCube supports a complete 4x4 through 11x11 sticker state");
+		setError(error, errorCapacity, "RCube supports a complete 4x4 through 101x101 sticker state");
 		return 1;
 	}
 

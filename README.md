@@ -16,7 +16,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 
 > [!IMPORTANT]
 > **Solvaus Hybrid only offers sizes it can solve and replay-verify.**
-> The native desktop app supports **2×2–11×11**; the standalone browser supports **2×2–21×21**. Browser solves from 9×9 to 21×21 may take up to 10 minutes and can be cancelled.
+> The native desktop app supports **2×2–101×101**; the standalone browser supports **2×2–21×21**. Browser solves from 9×9 to 21×21 may take up to 10 minutes; desktop solves remain bounded by a five-minute deadline. Both can be cancelled.
 
 ## What you can do
 
@@ -30,7 +30,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 
 ## A 60-second tour
 
-1. **Choose a supported size.** Desktop offers 2×2 through 11×11; browser offers 2×2 through 21×21.
+1. **Choose a supported size.** Desktop offers 2×2 through 101×101; browser offers 2×2 through 21×21.
 2. **Create the state.** Press **Scramble**, enter an algorithm, or turn faces manually.
 3. **Press Solve.** The solver receives the complete sticker-color state—not the scramble sequence.
 4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–21×21 solves use bounded WASM reduction, while desktop uses the cancellable native RCube engine.
@@ -44,13 +44,13 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 | Browser + desktop | **2×2** | Bounded meet-in-the-middle, beam, and island-GA strategies; shortest verified candidate wins | WASM Worker |
 | Browser + desktop | **3×3** | Two-phase Kociemba-style search | WASM Worker |
 | Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
-| Native desktop | **4×4–11×11** | RCube center, corner, and edge engine | Native C++ command thread + Rust replay verification |
+| Native desktop | **4×4–101×101** | RCube center, corner, and edge engine | Native C++ command thread + Rust replay verification |
 
 The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N; browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and independent replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
 
-### Why stop at 11×11 on desktop?
+### Large-cube limits
 
-A larger cube is easy to draw, but drawing one is not the same as solving one. RCube's engine is designed for much larger cubes, while this interactive product stays capped at 11×11 to keep rendering, input validation, and replay practical.
+The native desktop maximum is 101×101. Large cubes use the existing texture-based renderer above 21×21 rather than creating an individual 3D object for every cubie. Release-mode integration tests solve and independently replay representative odd and even states through the advertised maximum. RCube's storage uses the next power-of-two face stride; larger cubes remain capped until runtime, memory use, UI responsiveness, and replay are tested across supported platforms.
 
 Every advertised size must pass all of these gates:
 
@@ -144,7 +144,7 @@ This is an implementation fairness boundary—not a cryptographic proof—but it
 ```mermaid
 flowchart LR
     UI[Three.js Studio / Swarm] -->|2×2–21×21 sticker state| Worker[WASM Web Worker]
-    UI -->|desktop 4×4–11×11 sticker state| Tauri[Tauri native command]
+    UI -->|desktop 4×4–101×101 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]
     RCube -->|move sequence| Verify[cube_core replay verification]

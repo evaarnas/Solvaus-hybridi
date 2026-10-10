@@ -71,7 +71,7 @@ fn solve_with_rcube(
     colors: &[u8],
     control: &NativeReductionControl,
 ) -> Result<String, String> {
-    if !(4..=11).contains(&n) || colors.len() != 6 * n * n {
+    if !(4..=101).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
 
@@ -246,7 +246,7 @@ async fn solve_stickers(
     if request_token.len() < 16 || request_token.len() > 128 {
         return Err("invalid solve request token".to_string());
     }
-    if !(4..=11).contains(&n) || colors.len() != 6 * n * n {
+    if !(4..=101).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
 
@@ -299,32 +299,35 @@ mod tests {
     }
 
     #[test]
-    fn rcube_n11_browser_wide_turn_state() {
-        let n = 11;
-        let mut source = cube_wasm::CubeLab::new(n);
-        for (axis, start, width, dir) in [
-            (0, 0, 5, 1),
-            (1, 6, 5, -1),
-            (2, 0, 5, 1),
-            (0, 6, 5, -1),
-            (1, 0, 5, 1),
-            (2, 6, 5, -1),
-        ] {
-            for layer in start..start + width {
-                source.apply_design_move(axis, layer, dir);
+    #[ignore = "release-mode RCube size-scaling and replay gate"]
+    fn rcube_large_cube_wide_turn_states() {
+        for n in [11, 21, 32, 51, 64, 101] {
+            let width = n / 2;
+            let mut source = cube_wasm::CubeLab::new(n);
+            for (axis, start, dir) in [
+                (0, 0, 1),
+                (1, n - width, -1),
+                (2, 0, 1),
+                (0, n - width, -1),
+                (1, 0, 1),
+                (2, n - width, -1),
+            ] {
+                for layer in start..start + width {
+                    source.apply_design_move(axis, layer, dir);
+                }
             }
+            let colors = source.face_colors(n);
+            let control = NativeReductionControl::with_timeout(std::time::Duration::from_secs(30));
+            let started = Instant::now();
+            let result = solve_with_rcube(n, &colors, &control);
+            eprintln!(
+                "RCube N={n} browser-smoke state elapsed: {:?}",
+                started.elapsed()
+            );
+            let result = result.expect("RCube must solve and replay the browser-smoke state");
+            let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+            assert_eq!(result["winner"], "rcube");
         }
-        let colors = source.face_colors(n);
-        let control = NativeReductionControl::with_timeout(std::time::Duration::from_secs(5));
-        let started = Instant::now();
-        let result = solve_with_rcube(n, &colors, &control);
-        eprintln!(
-            "RCube N=11 browser-smoke state elapsed: {:?}",
-            started.elapsed()
-        );
-        let result = result.expect("RCube must solve and replay the 11x11 browser-smoke state");
-        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(result["winner"], "rcube");
     }
 
     #[test]
