@@ -15,11 +15,14 @@ struct RcubeMove {
 };
 
 using CancellationCheck = bool (*)(void*);
+using ProgressObserver = void (*)(void*, double);
 
 struct SolveContext {
 	std::vector<RcubeMove> moves;
 	CancellationCheck isCancelled;
 	void* cancellationContext;
+	ProgressObserver reportProgress;
+	void* progressContext;
 };
 
 static std::mutex scrambleMutex;
@@ -32,6 +35,15 @@ static void recordMove(void* rawContext, byte face, uint depth, int turns)
 		throw CubeSolveCancelled{};
 	}
 	context->moves.push_back({face, depth, turns});
+}
+
+static void reportProgress(void* rawContext, double percent)
+{
+	auto* context = static_cast<SolveContext*>(rawContext);
+	if (context->reportProgress != nullptr)
+	{
+		context->reportProgress(context->progressContext, percent);
+	}
 }
 
 static void setError(char* error, std::size_t capacity, const char* message)
@@ -48,6 +60,8 @@ extern "C" int rcube_solve(
 	std::size_t colorCount,
 	CancellationCheck isCancelled,
 	void* cancellationContext,
+	ProgressObserver progressObserver,
+	void* progressContext,
 	RcubeMove** outputMoves,
 	std::size_t* outputCount,
 	char* error,
@@ -98,16 +112,19 @@ extern "C" int rcube_solve(
 			}
 		}
 
-		SolveContext context{{}, isCancelled, cancellationContext};
+		SolveContext context{{}, isCancelled, cancellationContext, progressObserver, progressContext};
 		cube.SetMoveObserver(recordMove, &context);
+		cube.SetProgressObserver(reportProgress, &context);
 		cube.Solve();
 		cube.SetMoveObserver(nullptr, nullptr);
+		cube.SetProgressObserver(nullptr, nullptr);
 
 		if (!cube.IsCubeSolved())
 		{
 			setError(error, errorCapacity, "RCube finished without solving the cube");
 			return 1;
 		}
+		reportProgress(&context, 100.0);
 
 		if (!context.moves.empty())
 		{
@@ -166,7 +183,7 @@ extern "C" int rcube_scramble(
 	{
 		Cube cube(static_cast<uint>(size));
 		cube.MovesPerFrame = 0;
-		SolveContext context{{}, nullptr, nullptr};
+		SolveContext context{{}, nullptr, nullptr, nullptr, nullptr};
 		cube.SetMoveObserver(recordMove, &context);
 		{
 			std::lock_guard<std::mutex> lock(scrambleMutex);

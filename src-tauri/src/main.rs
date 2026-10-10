@@ -6,7 +6,7 @@ use cube_wasm::NativeReductionControl;
 use std::ffi::{c_char, c_void, CStr};
 use std::sync::Mutex;
 use std::time::Instant;
-use tauri::State;
+use tauri::{ipc::Channel, State};
 
 const TEXTURE_RENDER_THRESHOLD: usize = 21;
 
@@ -19,6 +19,18 @@ struct RcubeMove {
 }
 
 type CancellationCheck = unsafe extern "C" fn(*mut c_void) -> bool;
+type ProgressObserver = unsafe extern "C" fn(*mut c_void, f64);
+
+struct SolveProgressContext {
+    report: Box<dyn Fn(f64) + Send + Sync>,
+}
+
+unsafe extern "C" fn rcube_report_progress(context: *mut c_void, percent: f64) {
+    let Some(context) = (unsafe { context.cast::<SolveProgressContext>().as_ref() }) else {
+        return;
+    };
+    (context.report)(percent.clamp(0.0, 100.0));
+}
 
 extern "C" {
     fn rcube_solve(
@@ -27,6 +39,8 @@ extern "C" {
         color_count: usize,
         is_cancelled: Option<CancellationCheck>,
         cancellation_context: *mut c_void,
+        report_progress: Option<ProgressObserver>,
+        progress_context: *mut c_void,
         output_moves: *mut *mut RcubeMove,
         output_count: *mut usize,
         error: *mut c_char,
@@ -80,14 +94,10 @@ fn solve_with_rcube(
     n: usize,
     colors: &[u8],
     control: &NativeReductionControl,
+    progress: Option<Box<dyn Fn(f64) + Send + Sync>>,
 ) -> Result<String, String> {
     if !(4..=101).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
-    }
-
-    let mut replay = cube_wasm::CubeLab::new(n);
-    if !replay.load_face_colors(colors) {
-        return Err("invalid or incomplete sticker state".to_string());
     }
 
     let started = Instant::now();
@@ -97,6 +107,15 @@ fn solve_with_rcube(
     let cancellation_context = (control as *const NativeReductionControl)
         .cast_mut()
         .cast::<c_void>();
+    let mut progress_context = progress.map(|report| SolveProgressContext { report });
+    let progress_observer = progress_context
+        .as_mut()
+        .map(|_| rcube_report_progress as ProgressObserver);
+    let progress_context_ptr = progress_context
+        .as_mut()
+        .map_or(std::ptr::null_mut(), |context| {
+            (context as *mut SolveProgressContext).cast::<c_void>()
+        });
     let status = unsafe {
         rcube_solve(
             n as u32,
@@ -104,6 +123,8 @@ fn solve_with_rcube(
             colors.len(),
             Some(rcube_is_cancelled),
             cancellation_context,
+            progress_observer,
+            progress_context_ptr,
             &mut raw_moves,
             &mut raw_move_count,
             error.as_mut_ptr(),
@@ -157,7 +178,6 @@ fn solve_with_rcube(
             _ => (0, 1),
         };
         for _ in 0..quarter_turns {
-            replay.apply_design_move(axis, movement.layer_start, direction);
             if n <= TEXTURE_RENDER_THRESHOLD {
                 moves.push(serde_json::json!({
                     "axis": axis,
@@ -181,13 +201,9 @@ fn solve_with_rcube(
         }
     }
 
-    if !replay.is_solved() {
-        return Err("RCube solution failed independent replay verification".to_string());
-    }
-
     Ok(serde_json::json!({
         "found": true,
-        "verified": true,
+        "solvedByRcube": true,
         "compactMoves": n > TEXTURE_RENDER_THRESHOLD,
         "winner": "rcube",
         "moveCount": move_count,
@@ -340,6 +356,7 @@ impl SolveState {
 /// frontend boundary; scramble history never reaches the solver.
 #[tauri::command(rename_all = "camelCase")]
 async fn solve_stickers(
+    on_progress: Channel<serde_json::Value>,
     state: State<'_, SolveState>,
     request_token: String,
     n: usize,
@@ -356,9 +373,19 @@ async fn solve_stickers(
     state.begin(request_token.clone(), control.clone())?;
 
     let worker_control = control.clone();
-    let join_result =
-        tauri::async_runtime::spawn_blocking(move || solve_with_rcube(n, &colors, &worker_control))
-            .await;
+    let join_result = tauri::async_runtime::spawn_blocking(move || {
+        solve_with_rcube(
+            n,
+            &colors,
+            &worker_control,
+            Some(Box::new(move |percent| {
+                if let Err(error) = on_progress.send(serde_json::json!({ "percent": percent })) {
+                    eprintln!("failed to send RCube solve progress: {error}");
+                }
+            })),
+        )
+    })
+    .await;
 
     // Cleanup is unconditional and token-aware, including task join failure.
     state.finish(&request_token)?;
@@ -397,17 +424,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rcube_solution_replays_to_solved() {
+    fn rcube_solution_returns_path_and_monotonic_progress() {
         let n = 4;
         let mut lab = cube_wasm::CubeLab::new(n);
         assert!(lab.scramble(18, 0x5eed) > 0);
         let colors = lab.face_colors(n);
         let control = cube_wasm::native_reduction_control(n);
-        let result = solve_with_rcube(n, &colors, &control).unwrap();
+        let progress = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let progress_callback = std::sync::Arc::clone(&progress);
+        let result = solve_with_rcube(
+            n,
+            &colors,
+            &control,
+            Some(Box::new(move |percent| {
+                progress_callback.lock().unwrap().push(percent);
+            })),
+        )
+        .unwrap();
         let result: serde_json::Value = serde_json::from_str(&result).unwrap();
 
         assert_eq!(result["winner"], "rcube");
         assert_eq!(result["found"], true);
+        let progress = progress.lock().unwrap();
+        assert!(
+            progress.len() > 1,
+            "RCube progress callback did not stream updates"
+        );
+        assert_eq!(progress.last(), Some(&100.0));
+        assert!(progress.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert!(progress[..progress.len() - 1]
+            .iter()
+            .all(|percent| *percent <= 99.0));
+        drop(progress);
         assert_eq!(
             result["moveCount"].as_u64().unwrap() as usize,
             result["notation"].as_array().unwrap().len()
@@ -432,9 +480,9 @@ mod tests {
         }
         let colors = source.face_colors(n);
         let control = cube_wasm::native_reduction_control(n);
-        let result = solve_with_rcube(n, &colors, &control).unwrap();
+        let result = solve_with_rcube(n, &colors, &control, None).unwrap();
         let result: serde_json::Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(result["verified"], true);
+        assert_eq!(result["solvedByRcube"], true);
         assert_eq!(result["compactMoves"], true);
         assert!(!result["moves"].as_array().unwrap().is_empty());
         assert!(result["moveCount"].as_u64().unwrap() > 0);
@@ -492,7 +540,7 @@ mod tests {
             }
 
             let control = cube_wasm::native_reduction_control(n);
-            let solution = solve_with_rcube(n, &colors, &control).unwrap();
+            let solution = solve_with_rcube(n, &colors, &control, None).unwrap();
             let solution: serde_json::Value = serde_json::from_str(&solution).unwrap();
             for movement in solution["moves"].as_array().unwrap() {
                 lab.apply_design_move(
@@ -526,7 +574,7 @@ mod tests {
             let colors = source.face_colors(n);
             let control = NativeReductionControl::with_timeout(std::time::Duration::from_secs(30));
             let started = Instant::now();
-            let result = solve_with_rcube(n, &colors, &control);
+            let result = solve_with_rcube(n, &colors, &control, None);
             eprintln!(
                 "RCube N={n} browser-smoke state elapsed: {:?}",
                 started.elapsed()

@@ -1,4 +1,5 @@
 #include "Cube.h"
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -12,6 +13,14 @@ void Cube::SetMoveObserver(CubeMoveObserver observer, void* context)
 {
 	moveObserver = observer;
 	moveObserverContext = context;
+}
+
+void Cube::SetProgressObserver(CubeProgressObserver observer, void* context)
+{
+	progressObserver = observer;
+	progressObserverContext = context;
+	lastReportedProgress = -1;
+	ReportSolveProgress();
 }
 
 //Pairs of edge colors
@@ -302,6 +311,7 @@ void Cube::Solve()
 
 	//Cube is solved
 	Stage = 17;
+	ReportSolveProgress();
 	//Keep track of total hours of processing
 	Hours += CurrentProcessDuration();
 
@@ -310,6 +320,22 @@ void Cube::Solve()
 		PrintMoveProgress(100.0);
 		printf("\n");
 		fflush(stdout);
+	}
+}
+
+void Cube::ReportSolveProgress()
+{
+	if (progressObserver == nullptr)
+	{
+		return;
+	}
+
+	const double estimate = std::max(0.0, std::min(99.0, EstimatedSolveProgress()));
+	const int progress = static_cast<int>(estimate);
+	if (progress > lastReportedProgress)
+	{
+		lastReportedProgress = progress;
+		progressObserver(progressObserverContext, static_cast<double>(progress));
 	}
 }
 

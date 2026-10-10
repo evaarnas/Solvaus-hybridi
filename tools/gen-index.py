@@ -67,7 +67,7 @@ WIRE = r'''
         const p = isWin?100:Math.max(0,Math.min(100,(L.pct|0)));
         if(fill) fill.style.width = p+'%';
         if(pct){ pct.textContent = p+'%'; pct.style.color = (L.solved||isWin)?'#1BA64B':''; }
-        if(stat) stat.textContent = isWin ? ('verified · '+moves+' moves') : (L.solved?'solved':(L.label||'searching…'));
+        if (stat) stat.textContent = isWin ? ('RCube solved · '+moves+' moves') : (L.solved?'solved':(L.label||'searching…'));
         if(star) star.style.display = isWin ? 'inline' : 'none';
       });
     }
@@ -419,10 +419,13 @@ WIRE = r'''
       self._solveElapsedMs = elapsed;
       var engine = self._solveDispatch === 'native' ? 'Native RCube engine' :
                    self._solveDispatch === 'worker' ? 'WASM solver' : 'Solver';
-      var statusKey = engine+':'+self.n;
+      var estimatedProgress = self._solveDispatch === 'native' &&
+        Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null;
+      var statusKey = engine+':'+self.n+':'+(estimatedProgress === null ? 'active' : estimatedProgress);
       if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
         self._solveStatusKey = statusKey;
-        self.ui.status.textContent = engine + ' active on ' + self.n + '×' + self.n + ' · Cancel available';
+        var estimateLabel = estimatedProgress === null ? '' : ' · estimated ' + estimatedProgress + '%';
+        self.ui.status.textContent = engine + ' active on ' + self.n + '×' + self.n + estimateLabel + ' · Cancel available';
       }
       var badge = self.root.querySelector('[data-solve-elapsed]');
       if (!badge && self.ui && self.ui.status){
@@ -434,21 +437,46 @@ WIRE = r'''
       var travel = self.reducedMotion ? 0 : ((Math.floor(elapsed/500)%4) * 80);
       var lane = self.root.querySelector('[data-lane="det"]');
       if (lane){
-        lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
         var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
-        if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
-        if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
-        if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
+        if (estimatedProgress === null){
+          lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
+          if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
+          if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
+          if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
+        } else {
+          lane.setAttribute('aria-valuenow', String(estimatedProgress));
+          lane.setAttribute('aria-valuetext', 'RCube estimated solve progress ' + estimatedProgress + '%');
+          if (stat) stat.textContent = 'RCube estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
+          if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
+        }
       }
       var progress=self.root.querySelector('[data-progress]');
       if (progress){
-        if (progress.parentElement) progress.parentElement.style.overflow='hidden';
-        progress.removeAttribute('aria-valuenow'); progress.setAttribute('aria-valuetext','Solver active');
-        progress.style.width='28%'; progress.style.transform='translateX('+travel+'%)'; progress.style.transition='transform .5s linear';
+        if (estimatedProgress === null){
+          if (progress.parentElement) progress.parentElement.style.overflow='hidden';
+          progress.removeAttribute('aria-valuenow'); progress.setAttribute('aria-valuetext','Solver active');
+          progress.style.width='28%'; progress.style.transform='translateX('+travel+'%)'; progress.style.transition='transform .5s linear';
+        } else {
+          progress.setAttribute('aria-valuenow', String(estimatedProgress));
+          progress.setAttribute('aria-valuetext', 'RCube estimated solve progress ' + estimatedProgress + '%');
+          progress.style.width=estimatedProgress+'%'; progress.style.transform='none'; progress.style.transition='width .25s linear';
+        }
       }
+    }
+    function updateNativeSolveProgress(self, requestToken, payload){
+      if (!self._solvePending || self._solveDispatch !== 'native' ||
+          self._solveRequestToken !== requestToken || !payload ||
+          !Number.isFinite(payload.percent)) return;
+      self._nativeSolveProgress = Math.max(0, Math.min(100, Math.round(payload.percent)));
+      var progressLabel = self.root.querySelector('[data-native-solve-progress]');
+      if (progressLabel) progressLabel.textContent = self._nativeSolveProgress + '%';
+      if (self.setSolvedPct) self.setSolvedPct(self._nativeSolveProgress / 100);
+      refreshSolveActivity(self);
     }
     function startSolveActivity(self){
       self._solveStartedAt = performance.now();
+      self._nativeSolveProgress = null;
       clearInterval(self._solveHeartbeat);
       refreshSolveActivity(self);
       self._solveHeartbeat = setInterval(function(){ refreshSolveActivity(self); }, 500);
@@ -456,6 +484,7 @@ WIRE = r'''
     function stopSolveActivity(self){
       clearInterval(self._solveHeartbeat);
       self._solveHeartbeat = null;
+      self._nativeSolveProgress = null;
       self._solveElapsedMs = self._solveStartedAt ? performance.now() - self._solveStartedAt : 0;
       self._solveStatusKey = null;
       var badge=self.root.querySelector('[data-solve-elapsed]'); if (badge) badge.style.display='none';
@@ -472,7 +501,21 @@ WIRE = r'''
       startSolveActivity(self);
       var jobId = self._solveJobId, requestToken = self._solveRequestToken;
       var colors = Array.from(self.lab.face_colors(self.n));
-      core.invoke('solve_stickers', { requestToken:requestToken, n:self.n, colors:colors }).then(function(result){
+      var coreApi = window.__TAURI__ && window.__TAURI__.core;
+      if (!coreApi || typeof coreApi.Channel !== 'function'){
+        onSolveResult(self, {
+          type:'result', jobId:jobId, ok:false,
+          error:'Native RCube progress channel is unavailable'
+        });
+        return true;
+      }
+      var progressChannel = new coreApi.Channel();
+      progressChannel.onmessage = function(payload){
+        updateNativeSolveProgress(self, requestToken, payload);
+      };
+      core.invoke('solve_stickers', {
+        requestToken:requestToken, n:self.n, colors:colors, onProgress:progressChannel
+      }).then(function(result){
         onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:result });
       }).catch(function(error){
         onSolveResult(self, { type:'result', jobId:jobId, ok:false, error:String(error) });
@@ -647,7 +690,7 @@ WIRE = r'''
       showCancel(self, false);
       var res = null;
       if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
-      var compactNativeTextureResult=!!(res&&res.verified&&res.compactMoves&&self.mode==='texture'&&self.n>21);
+      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture'&&self.n>21);
       if (!res || !res.found || !res.moves || !res.moves.length){
         self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
@@ -657,12 +700,12 @@ WIRE = r'''
         if (self.syncControls) self.syncControls();
         return;
       }
-      // Compact texture results carry single-slice operations; native replay
-      // verification allows accepting them without blocking the UI thread.
+      // Large-cube results trust RCube's own solved-state check; replaying the
+      // compact path through CubeLab here would duplicate its work before playback.
       var targetVerified=false;
       try {
         if (compactNativeTextureResult){
-          targetVerified=res.verified===true;
+          targetVerified=res.solvedByRcube===true;
         } else {
           res.moves.forEach(function(m){ self.lab.apply_design_move(m.axis,m.layer,m.dir); });
           targetVerified=self.lab.is_solved();
@@ -724,7 +767,7 @@ WIRE = r'''
         self.totalMoves = self.queue.length;
       }
       self.phase = 'solving'; self.busy = true;
-      if (self.ui && self.ui.status) self.ui.status.textContent = 'Verified in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
+      if (self.ui && self.ui.status) self.ui.status.textContent = 'RCube reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
     }
@@ -878,7 +921,9 @@ WIRE = r'''
           if (note) note.innerHTML = '<b>Unsupported cube size.</b> Return to Studio and choose a size inside this platform’s replay-verified range.';
           if (liveEl) liveEl.textContent = 'No solver is available for this size';
         } else {
-          if (note) note.innerHTML = 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop uses RCube; browser builds use Rust reduction. Both report elapsed activity and replay proof without inventing search progress.';
+          if (note) note.innerHTML = nativeCore()
+            ? 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop RCube reports its stage-based estimated solve progress; the percentage is an estimate, not a measure of remaining time.'
+            : 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Browser reduction reports elapsed activity and replay proof without inventing a search percentage.';
           if (liveEl && liveEl.textContent !== 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3') liveEl.textContent = 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3';
         }
         if (msg){
@@ -899,13 +944,16 @@ WIRE = r'''
             if (n > SOLVE_MAX_N){
               msg.innerHTML = '<b>'+n+'×'+n+' is not supported.</b><div style="margin-top:7px;">This build intentionally offers only sizes with a replay-verified solver.</div>';
             } else if (this._solvePending){
+              var nativeSolving = this._solveDispatch === 'native';
               msg.innerHTML = '<div style="display:flex;align-items:center;gap:9px;color:#1573E6;"><span style="width:10px;height:10px;border-radius:50%;background:#1573E6;box-shadow:0 0 0 5px rgba(21,115,230,.12);"></span><b>'+
-                (this._solveDispatch === 'native' ? 'Native reduction is active (RCube engine)' : 'WASM solver is active') +
-                '</b></div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:12px;">'+n+'×'+n+' · <span data-reduction-elapsed aria-hidden="true">0s</span></div>' + pipeline +
-                '<div style="font-size:12px;color:#6F756A;">Working from '+(6*n*n).toLocaleString()+' visible sticker colours. Progress percentages are intentionally omitted because solve stages have data-dependent costs.</div>'+
+                (nativeSolving ? 'Native reduction is active (RCube engine)' : 'WASM solver is active') +
+                '</b></div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:12px;">'+n+'×'+n+' · <span data-reduction-elapsed aria-hidden="true">0s</span>' +
+                (nativeSolving ? ' · <span data-native-solve-progress>0%</span>' : '') + '</div>' + pipeline +
+                '<div style="font-size:12px;color:#6F756A;">Working from '+(6*n*n).toLocaleString()+' visible sticker colours. '+
+                (nativeSolving ? 'RCube percentage is its stage-based estimate; it does not predict remaining time.' : 'Browser solve progress is reported as elapsed activity until a verified solution is returned.')+'</div>'+
                 '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel solve</button>';
             } else if (replaying){
-              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ Verified solution is replaying</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
+              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ '+(nativeRcube?'RCube reports solved — replaying':'Verified solution is replaying')+'</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
                 '<div data-replay-moves style="font-size:12px;color:#6F756A;">0 / '+this.totalMoves+' animation steps</div>'+
                 '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel playback</button>';
             } else if (telem && telem.n === n && telem.verified){
@@ -1257,7 +1305,7 @@ WIRE = r'''
         ? 'Orients corners and edges into the UD-slice subgroup, then solves the permutation within it — a near-optimal solution for any 3×3 scramble.'
         : reduction
           ? nativeRcube
-            ? 'Uses RCube center, corner, and edge solving; every returned move is replayed by the Rust cube model before animation.'
+            ? 'Uses RCube center, corner, and edge solving; trusts RCube’s solved-state check and replays its returned path in the UI.'
             : 'Solves centers, pairs wing orbits, resolves parity, then finishes the reduced 3×3; every returned path is replay-verified.'
           : 'Searches forward from the scrambled state and backward from solved until the paths meet — exact & shortest.';
       var head = self.root.querySelector('[data-race-head]');
@@ -1267,7 +1315,7 @@ WIRE = r'''
         ? 'two-phase solver — near-optimal, never the scramble inverse'
         : reduction
           ? nativeRcube
-            ? 'RCube engine · centers → corners → edges · independent replay'
+            ? 'RCube engine · centers → corners → edges · RCube solved-state check'
             : 'centers → wing pairing → reduced 3×3 + parity'
           : '3 strategies on the cube state — none see the scramble';
       // Clear any stale per-lane result (e.g. when switching N) so a previous

@@ -10,6 +10,7 @@ typedef unsigned long long uint64;
 
 struct CubeSolveCancelled {};
 using CubeMoveObserver = void (*)(void*, byte, uint, int);
+using CubeProgressObserver = void (*)(void*, double);
 
 class Cube
 {
@@ -30,12 +31,16 @@ class Cube
 	bool EdgeState[12];//Current solve state of each egde
 	CubeMoveObserver moveObserver = nullptr;
 	void* moveObserverContext = nullptr;
+	CubeProgressObserver progressObserver = nullptr;
+	void* progressObserverContext = nullptr;
+	int lastReportedProgress = -1;
 
 	inline void RotateX(uint c, int step);
 	inline void RotateY(uint c, int step);
 	inline void RotateZ(uint c, int step);
 	void PrintMoveProgress(double estimatedProgress);
 	double EstimatedSolveProgress();
+	void ReportSolveProgress();
 	inline void CountMoves(uint64 moves);
 	
 	const static byte cmap[30][6];		//Parameters for center commutators 
@@ -73,6 +78,7 @@ public:
 	void Cleanup();
 
 	void SetMoveObserver(CubeMoveObserver observer, void* context);
+	void SetProgressObserver(CubeProgressObserver observer, void* context);
 
 	inline void ExportFrame();
 
@@ -173,6 +179,7 @@ inline void Cube::CountMoves(const uint64 moves)
 {
 	const uint64 previousMoveCount = MoveCount;
 	MoveCount += moves;
+	ReportSolveProgress();
 
 	if (MovesPerFrame <= 0)
 	{
