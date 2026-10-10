@@ -1,0 +1,19 @@
+[package]
+name = "cube-solver"
+version = "0.1.0"
+description = "Solvaus Hybrid — replay-verified N×N cube solver studio"
+authors = ["Adam Nolle"]
+edition = "2021"
+
+[build-dependencies]
+cc = "1"
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+cube_core = { path = "../crates/cube_core" }
+cube_wasm = { path = "../crates/cube_wasm" }
+serde_json = "1"
+
+# Own workspace — independent of the parent crates' workspace/profile.
+[workspace]

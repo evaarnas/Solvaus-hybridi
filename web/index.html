@@ -1,0 +1,2561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solvaus Hybrid — N×N Solver Studio</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#ECEBE6}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+button:focus-visible,input:focus-visible{outline:3px solid #1573E6;outline-offset:3px}
+button:disabled{cursor:not-allowed;opacity:.42}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:#dad7d0;border-radius:9px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:#c8c4bb}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pop{0%{transform:scale(.4);opacity:0}55%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.001ms!important}}
+@media (max-width:900px){
+  .app-shell{height:auto!important;min-height:100vh;overflow:auto!important}
+  .topbar{height:auto!important;min-height:62px;flex-wrap:wrap;gap:8px;padding:10px 14px!important}
+  .main-area{min-height:0;overflow:visible}
+  .studio-layout{height:auto!important;min-height:calc(100vh - 82px);flex-direction:column}
+  .cube-viewport{min-height:55vh}
+  .control-rail{width:100%!important;overflow:visible!important}
+}
+</style>
+<script src="./vendor/three.min.js"></script>
+
+</head>
+<body>
+
+<div data-dcref="rootRef" class="app-shell" style="height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1A1A18;background:radial-gradient(130% 120% at 50% -10%, #FCFCFA 0%, #F2F1ED 62%, #E9E8E2 100%);-webkit-font-smoothing:antialiased;">
+
+  <!-- TOP BAR -->
+  <header class="topbar" style="height:62px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid rgba(20,20,18,.06);">
+    <div style="display:flex;align-items:center;gap:11px;">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M13 2 22.5 7v12L13 24 3.5 19V7L13 2Z" fill="#161514"/><path d="M13 2 22.5 7 13 12 3.5 7 13 2Z" fill="#E0243C"/><path d="M13 12 22.5 7v12L13 24V12Z" fill="#1573E6"/><path d="M13 12 3.5 7v12L13 24V12Z" fill="#1BA64B"/></svg>
+      <div style="display:flex;flex-direction:column;line-height:1.05;">
+        <span style="font-weight:600;font-size:16px;letter-spacing:-.01em;">Solvaus Hybrid</span>
+        <span style="font-size:10.5px;color:#A6A299;letter-spacing:.02em;">RCube engine · live 3D solver</span>
+      </div>
+    </div>
+    <nav role="tablist" aria-label="Workspace" style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
+      <button id="studio-tab" role="tab" aria-controls="studio-panel" data-view="studio" data-onclick="onViewClick" style="padding:7px 17px;border-radius:8px;font-size:13px;font-weight:500;color:#8C887F;transition:.18s;">Studio</button>
+      <button id="swarm-tab" role="tab" aria-controls="swarm-panel" data-view="swarm" data-onclick="onViewClick" style="padding:7px 17px;border-radius:8px;font-size:13px;font-weight:500;color:#8C887F;transition:.18s;">Swarm</button>
+    </nav>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button data-spin aria-pressed="true" aria-label="Toggle automatic cube orbit" data-onclick="onSpinToggle" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8C887F;padding:6px 8px;border-radius:8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+        Auto-orbit
+      </button>
+      <span style="font-size:11px;color:#B7B3AA;padding:5px 10px;border:1px solid rgba(20,20,18,.08);border-radius:20px;">RCube + Rust verified</span>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main-area" style="flex:1;position:relative;min-height:0;">
+
+    <!-- ===== STUDIO ===== -->
+    <div id="studio-panel" role="tabpanel" aria-labelledby="studio-tab" data-id="studio" class="studio-layout" style="display:flex;height:100%;gap:16px;padding:16px;">
+
+      <!-- viewport -->
+      <div class="cube-viewport" aria-label="Interactive cube viewport" style="flex:1;min-width:0;position:relative;background:linear-gradient(180deg,#FFFFFF 0%,#FBFBF9 100%);border:1px solid #ECEAE4;border-radius:22px;box-shadow:0 1px 2px rgba(20,20,18,.04),0 22px 48px -26px rgba(20,20,18,.16);overflow:hidden;">
+        <div data-stage style="position:absolute;inset:0;"></div>
+
+        <!-- top-left badges -->
+        <div style="position:absolute;top:16px;left:18px;display:flex;flex-direction:column;gap:7px;pointer-events:none;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span data-n-badge style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;background:#161514;color:#fff;padding:5px 10px;border-radius:9px;letter-spacing:.02em;">3×3</span>
+            <span data-pieces style="font-size:11.5px;color:#A6A299;">26 pieces</span>
+          </div>
+        </div>
+
+        <!-- solved ring top-right -->
+        <div style="position:absolute;top:14px;right:16px;width:66px;height:66px;pointer-events:none;">
+          <svg width="66" height="66" viewBox="0 0 66 66">
+            <circle cx="33" cy="33" r="28" stroke="#EDEBE5" stroke-width="6" fill="none"/>
+            <circle data-ring cx="33" cy="33" r="28" stroke="#161514" stroke-width="6" fill="none" stroke-linecap="round" transform="rotate(-90 33 33)"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;">
+            <span data-pct style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:500;">100</span>
+            <span style="font-size:8px;color:#A6A299;letter-spacing:.08em;margin-top:2px;">SOLVED</span>
+          </div>
+        </div>
+
+        <!-- drag hint -->
+        <div style="position:absolute;bottom:16px;left:18px;font-size:11.5px;color:#B7B3AA;display:flex;align-items:center;gap:6px;pointer-events:none;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/></svg> drag to orbit
+        </div>
+
+        <!-- HUD bottom-center -->
+        <div style="position:absolute;bottom:26px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:11px;pointer-events:none;background:rgba(255,255,255,.88);backdrop-filter:blur(8px);border:1px solid rgba(20,20,18,.07);border-radius:24px;padding:6px 7px 6px 15px;box-shadow:0 8px 22px -12px rgba(20,20,18,.3);">
+          <span data-status role="status" aria-live="polite" style="font-size:12.5px;color:#6E6A61;">Solved — scramble to begin</span>
+          <span data-move style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:#161514;min-width:30px;text-align:center;display:none;"></span>
+          <span data-count style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#fff;background:#161514;padding:6px 11px;border-radius:18px;display:none;">0 / 0</span>
+        </div>
+
+        <!-- solve progress bar -->
+        <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(20,20,18,.06);">
+          <div data-progress role="progressbar" aria-label="Solve progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" style="height:100%;width:100%;background:#161514;transition:width .12s linear;"></div>
+        </div>
+      </div>
+
+      <!-- rail -->
+      <aside class="control-rail" aria-label="Cube controls" style="width:368px;flex:none;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:2px;">
+
+        <!-- config card -->
+        <div style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">CUBE SIZE</span>
+            <span data-n-info style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8C887F;">3×3×3 · 26 pcs</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:6px;flex:1;">
+              <button data-n="2" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">2</button>
+              <button data-n="3" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">3</button>
+              <button data-n="4" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">4</button>
+              <button data-n="5" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">5</button>
+              <button data-n="7" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">7</button>
+              <button data-n="11" data-onclick="onNClick" style="flex:1;height:40px;border-radius:11px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;transition:.16s;">11</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;background:#F4F3EF;border-radius:11px;padding:4px;">
+              <button data-dec data-onclick="onDecN" style="width:30px;height:32px;border-radius:8px;font-size:18px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">−</button>
+              <button data-inc data-onclick="onIncN" style="width:30px;height:32px;border-radius:8px;font-size:16px;color:#6E6A61;display:flex;align-items:center;justify-content:center;">+</button>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;margin-top:13px;">
+            <input data-nslider aria-label="Cube size" type="range" min="2" max="11" step="1" data-onchange="onNSlider" style="flex:1;accent-color:#161514;height:4px;cursor:pointer;">
+            <span data-nval style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#161514;min-width:64px;text-align:right;">3×3</span>
+          </div>
+          <div data-size-note style="font-size:11px;color:#66635C;margin-top:9px;line-height:1.45;">Only replay-verified sizes are available. This desktop build solves 2×2 through 11×11.</div>
+
+          <div style="height:1px;background:#F1EFEA;margin:16px 0;"></div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">SCRAMBLE DEPTH</span>
+            <span data-scramble-val style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#161514;">20</span>
+          </div>
+          <input data-scramble aria-label="Scramble depth" type="range" min="4" max="40" step="1" data-onchange="onScrambleInput" style="width:100%;accent-color:#161514;height:4px;cursor:pointer;">
+
+          <div style="height:1px;background:#F1EFEA;margin:16px 0;"></div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">TURN SPEED</span>
+          </div>
+          <div style="display:flex;background:#F1F0EC;border-radius:11px;padding:3px;gap:2px;">
+            <button data-speed="slow" data-onclick="onSpeedClick" style="flex:1;height:32px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Slow</button>
+            <button data-speed="normal" data-onclick="onSpeedClick" style="flex:1;height:32px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Normal</button>
+            <button data-speed="fast" data-onclick="onSpeedClick" style="flex:1;height:32px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Fast</button>
+          </div>
+        </div>
+
+        <!-- custom scramble builder -->
+        <div data-custom-scramble style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px;">
+            <div>
+              <div style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#66635C;">BUILD YOUR SCRAMBLE</div>
+              <div style="font-size:11px;color:#66635C;margin-top:4px;line-height:1.4;">Type an algorithm or turn faces yourself.</div>
+            </div>
+            <span data-custom-count style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#1573E6;white-space:nowrap;">0 moves</span>
+          </div>
+          <label for="custom-algorithm" style="display:block;font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">MOVE NOTATION</label>
+          <textarea id="custom-algorithm" data-alg-input rows="2" spellcheck="false" aria-describedby="custom-algorithm-help custom-algorithm-error" placeholder="R U R' U'  ·  3Rw2 F2" style="width:100%;resize:vertical;min-height:58px;border:1px solid #DEDAD2;border-radius:11px;padding:10px 11px;background:#FBFBF9;color:#1A1A18;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
+          <div id="custom-algorithm-error" data-alg-error role="alert" style="display:none;margin-top:7px;color:#A23B3B;font-size:11px;line-height:1.4;"></div>
+          <div style="display:flex;gap:8px;margin-top:9px;">
+            <button type="button" data-alg-apply style="flex:1;height:36px;border-radius:10px;background:#161514;color:#fff;font-size:12px;font-weight:600;">Apply from solved</button>
+            <button type="button" data-alg-clear style="height:36px;padding:0 12px;border-radius:10px;border:1px solid #E4E1DA;color:#6E6A61;font-size:12px;font-weight:500;">Clear</button>
+          </div>
+          <div id="custom-algorithm-help" style="font-size:10.5px;color:#66635C;margin-top:7px;line-height:1.45;">Use U D L R F B, optional prime/2, and wide turns such as Rw or 3Rw. Wide turns are available on 4×4 and larger.</div>
+
+          <div style="height:1px;background:#F1EFEA;margin:14px 0;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <label style="font-size:10.5px;font-weight:600;color:#6E6A61;">TURN WIDTH
+              <select data-turn-width style="display:block;width:100%;height:34px;margin-top:6px;border:1px solid #DEDAD2;border-radius:9px;background:#FBFBF9;color:#1A1A18;padding:0 8px;font-size:12px;"></select>
+            </label>
+            <div>
+              <div style="font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">TURN AMOUNT</div>
+              <div style="display:flex;background:#F1F0EC;border-radius:9px;padding:3px;gap:2px;">
+                <button type="button" data-turn-amount="1" aria-pressed="true" aria-label="Clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">90°</button>
+                <button type="button" data-turn-amount="-1" aria-pressed="false" aria-label="Counter-clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">−90°</button>
+                <button type="button" data-turn-amount="2" aria-pressed="false" aria-label="Half turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">180°</button>
+              </div>
+            </div>
+          </div>
+          <div data-face-turns style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
+            <button type="button" data-turn-face="U" aria-label="Turn Up face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">U</button>
+            <button type="button" data-turn-face="D" aria-label="Turn Down face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">D</button>
+            <button type="button" data-turn-face="L" aria-label="Turn Left face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">L</button>
+            <button type="button" data-turn-face="R" aria-label="Turn Right face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">R</button>
+            <button type="button" data-turn-face="F" aria-label="Turn Front face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">F</button>
+            <button type="button" data-turn-face="B" aria-label="Turn Back face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">B</button>
+          </div>
+          <button type="button" data-turn-undo style="width:100%;height:32px;margin-top:8px;border-radius:9px;color:#66635C;font-size:11.5px;border:1px solid #D8D5CE;">Undo last manual turn</button>
+        </div>
+
+        <!-- actions -->
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <button data-act-solve data-onclick="onSolve" style="height:52px;border-radius:15px;background:#161514;color:#fff;font-size:15px;font-weight:600;letter-spacing:-.01em;box-shadow:0 6px 18px -6px rgba(20,20,18,.5);transition:.16s;display:flex;align-items:center;justify-content:center;gap:9px;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3Z"/></svg>
+            Solve
+          </button>
+          <div style="display:flex;gap:9px;">
+            <button data-act-scramble data-onclick="onScramble" style="flex:1;height:44px;border-radius:13px;background:#fff;border:1px solid #E4E1DA;color:#1A1A18;font-size:13.5px;font-weight:500;transition:.16s;display:flex;align-items:center;justify-content:center;gap:7px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.5a5 5 0 0 0 4-2l7-8a5 5 0 0 1 4-2H22"/><path d="M2 6h1.5a5 5 0 0 1 4 2l.5.6"/><path d="m14.5 15.4.5.6a5 5 0 0 0 4 2H22"/></svg>
+              Scramble
+            </button>
+            <button data-act-replay data-onclick="onReplay" style="flex:1;height:44px;border-radius:13px;background:#fff;border:1px solid #E4E1DA;color:#1A1A18;font-size:13.5px;font-weight:500;transition:.16s;display:flex;align-items:center;justify-content:center;gap:7px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Replay
+            </button>
+          </div>
+          <button data-act-reset data-onclick="onReset" style="height:34px;font-size:12.5px;color:#A6A299;transition:.16s;">Reset to solved</button>
+        </div>
+
+        <!-- solver race -->
+        <div style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;">
+            <span data-race-head style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;">SOLVER RACE</span>
+            <span data-race-sub style="font-size:11px;color:#B7B3AA;">Adaptive verified solver</span>
+          </div>
+
+          <div data-lane="det" style="margin-bottom:15px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#1573E6;"></span>
+              <span style="font-size:13px;font-weight:500;flex:1;">Meet-in-the-middle</span>
+              <span data-star style="font-size:11px;color:#C99A1E;display:none;">★ winner</span>
+              <span data-pct2 style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A6A299;">0%</span>
+            </div>
+            <div style="height:6px;background:#F1EFEA;border-radius:6px;overflow:hidden;"><div data-fill style="height:100%;width:0%;background:#1573E6;border-radius:6px;transition:width .1s linear;"></div></div>
+            <div data-stat style="font-size:11px;color:#B7B3AA;margin-top:5px;">idle</div>
+          </div>
+
+          <div data-lane="beam" style="margin-bottom:15px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#FF7A1A;"></span>
+              <span style="font-size:13px;font-weight:500;flex:1;">Beam search</span>
+              <span data-star style="font-size:11px;color:#C99A1E;display:none;">★ winner</span>
+              <span data-pct2 style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A6A299;">0%</span>
+            </div>
+            <div style="height:6px;background:#F1EFEA;border-radius:6px;overflow:hidden;"><div data-fill style="height:100%;width:0%;background:#FF7A1A;border-radius:6px;transition:width .1s linear;"></div></div>
+            <div data-stat style="font-size:11px;color:#B7B3AA;margin-top:5px;">idle</div>
+          </div>
+
+          <div data-lane="evo">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#1BA64B;"></span>
+              <span style="font-size:13px;font-weight:500;flex:1;">Island genetic</span>
+              <span data-star style="font-size:11px;color:#C99A1E;display:none;">★ winner</span>
+              <span data-pct2 style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A6A299;">0%</span>
+            </div>
+            <div style="height:6px;background:#F1EFEA;border-radius:6px;overflow:hidden;"><div data-fill style="height:100%;width:0%;background:#1BA64B;border-radius:6px;transition:width .1s linear;"></div></div>
+            <div data-stat style="font-size:11px;color:#B7B3AA;margin-top:5px;">idle</div>
+          </div>
+        </div>
+
+        <!-- solution -->
+        <div style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:13px;">
+            <div style="display:flex;flex-direction:column;line-height:1;">
+              <span style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#A6A299;margin-bottom:8px;">SOLUTION</span>
+              <div style="display:flex;align-items:baseline;gap:7px;">
+                <span data-sol-count style="font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-.02em;">—</span>
+                <span style="font-size:13px;color:#A6A299;">moves</span>
+              </div>
+            </div>
+            <button data-copy data-onclick="onCopy" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8C887F;padding:7px 11px;border:1px solid #E4E1DA;border-radius:9px;transition:.16s;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy
+            </button>
+          </div>
+          <div data-sol-chips style="display:flex;flex-wrap:wrap;gap:5px;max-height:96px;overflow-y:auto;">
+            <span style="font-size:12.5px;color:#B7B3AA;">Solve a scramble to see the winning path.</span>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+
+    <!-- ===== SWARM ===== -->
+    <div id="swarm-panel" role="tabpanel" aria-labelledby="swarm-tab" data-id="swarm" style="display:none;height:100%;flex-direction:column;padding:18px 20px;">
+      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:14px;">
+        <div style="display:flex;align-items:center;gap:26px;">
+          <div style="display:flex;flex-direction:column;line-height:1;">
+            <span data-swarm-total style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;">0</span>
+            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">cubes converged</span>
+          </div>
+          <div style="display:flex;flex-direction:column;line-height:1;">
+            <span data-swarm-run style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;color:#1573E6;">0</span>
+            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">solving now</span>
+          </div>
+          <div style="display:flex;flex-direction:column;line-height:1;">
+            <span data-swarm-avg style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;">0%</span>
+            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">avg progress</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
+            <button data-count="16" data-onclick="onCountClick" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">16</button>
+            <button data-count="36" data-onclick="onCountClick" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">36</button>
+            <button data-count="64" data-onclick="onCountClick" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">64</button>
+            <button data-count="100" data-onclick="onCountClick" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">100</button>
+          </div>
+          <div style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
+            <button data-sspeed="calm" data-onclick="onSwarmSpeed" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Calm</button>
+            <button data-sspeed="lively" data-onclick="onSwarmSpeed" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Lively</button>
+          </div>
+        </div>
+      </div>
+      <div data-swarm style="flex:1;overflow-y:auto;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;justify-content:center;padding-bottom:4px;"></div>
+    </div>
+
+  </main>
+</div>
+
+<script type="module">
+import init, { CubeLab, Swarm } from './pkg/cube_wasm.js';
+
+  class DCLogic {
+    constructor(props){ this.props = props || {}; this.state = {}; }
+    q(sel){ return (this.root || document).querySelector(sel); }
+    qa(sel){ return Array.from((this.root || document).querySelectorAll(sel)); }
+    setState(u){ Object.assign(this.state, typeof u === 'function' ? u(this.state) : u); }
+    forceUpdate(){}
+  }
+
+
+class Component extends DCLogic {
+  state = {};
+
+  renderVals() {
+    return {
+      rootRef: (el) => { if (el) this.root = el; },
+      onViewClick: (e) => this.setView(e.currentTarget.dataset.view),
+      onNClick: (e) => this.setN(parseInt(e.currentTarget.dataset.n, 10)),
+      onIncN: () => this.setN(this.n + 1),
+      onDecN: () => this.setN(this.n - 1),
+      onScramble: () => this.scramble(),
+      onSolve: () => this.solve(),
+      onReplay: () => this.replay(),
+      onReset: () => this.resetSolved(),
+      onScrambleInput: (e) => { this.scrambleDepth = parseInt(e.target.value, 10); this.q('[data-scramble-val]').textContent = this.scrambleDepth; },
+      onNSlider: (e) => this.setN(this.sliderToN(parseInt(e.target.value, 10))),
+      onSpeedClick: (e) => this.setSpeed(e.currentTarget.dataset.speed),
+      onSpinToggle: () => { this.autoSpin = !this.autoSpin; this.syncControls(); },
+      onCopy: () => this.copyPath(),
+      onCountClick: (e) => this.setSwarmCount(parseInt(e.currentTarget.dataset.count, 10)),
+      onSwarmSpeed: (e) => { this.swarmSpeed = e.currentTarget.dataset.sspeed === 'lively' ? 2.0 : 1.0; this.syncControls(); },
+    };
+  }
+
+  // ---- palettes ----
+  palettes() {
+    return {
+      Classic: { w:'#F8F8F5', y:'#FFD400', g:'#00A24B', b:'#0046C7', o:'#FF5A00', r:'#D5142B' },
+      Vivid:   { w:'#FFFFFF', y:'#FFE000', g:'#00C853', b:'#2979FF', o:'#FF6D00', r:'#FF1744' },
+      Pastel:  { w:'#FBFAF7', y:'#F2D98A', g:'#9BD8A6', b:'#A8C8F0', o:'#F2BE97', r:'#EBA1A8' },
+    };
+  }
+
+  componentDidMount() {
+    // config
+    this.n = 3;
+    this.CUBIE_MAX = 11;
+    this.scrambleDepth = 20;
+    this.speedDur = 0.52;
+    this.view = 'studio';
+    this.reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    this.autoSpin = this.props.autoSpin !== false && !this.reducedMotion;
+    this.swarmCount = 64;
+    this.swarmSpeed = 1.0;
+    this.accent = this.props.accent || '#161514';
+    const pals = this.palettes();
+    this.PAL = pals[this.props.palette] || pals.Classic;
+    this.faceList = [this.PAL.w, this.PAL.y, this.PAL.g, this.PAL.b, this.PAL.o, this.PAL.r];
+
+    // runtime
+    this.phase = 'idle'; // idle | scrambling | solving
+    this.scrambled = false;
+    this.hasSolution = false;
+    this.busy = false;
+    this.queue = [];
+    this.activeMove = null;
+    this.movesDone = 0;
+    this.totalMoves = 0;
+    this.lastScramble = [];
+    this.lastSolution = [];
+    this.solveProgress = 0;
+    this.cards = [];
+    this.cumulativeSolves = 0;
+    this.vel = { x: 0, y: 0 };
+    this.dragging = false;
+
+    this.cacheRefs();
+    this.syncControls();
+
+    const boot = () => {
+      if (window.THREE) { this.initThree(); this.buildCube(this.n); this.initSwarm(); this.loop(); }
+      else setTimeout(boot, 30);
+    };
+    boot();
+
+    window.addEventListener('keydown', this.onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target;
+      if (target && (target.isContentEditable || ['INPUT','BUTTON','SELECT','TEXTAREA'].includes(target.tagName))) return;
+      if (e.code === 'Space') { e.preventDefault(); this.scrambled ? this.solve() : this.scramble(); }
+      else if (e.key === 's' || e.key === 'S') this.scramble();
+      else if (e.key === 'r' || e.key === 'R') this.replay();
+    });
+    this.root.addEventListener('keydown', this.onTabKey = (e) => {
+      if (!e.target || e.target.getAttribute('role') !== 'tab') return;
+      const tabs = this.qa('[role="tab"]');
+      const current = tabs.indexOf(e.target);
+      let next = current;
+      if (e.key === 'ArrowRight') next = (current + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = tabs.length - 1;
+      else return;
+      e.preventDefault();
+      this.setView(tabs[next].dataset.view);
+      tabs[next].focus();
+    });
+  }
+
+  q(sel) { return this.root.querySelector(sel); }
+  qa(sel) { return Array.from(this.root.querySelectorAll(sel)); }
+
+  cacheRefs() {
+    this.ui = {
+      stage: this.q('[data-stage]'),
+      ring: this.q('[data-ring]'),
+      pct: this.q('[data-pct]'),
+      status: this.q('[data-status]'),
+      count: this.q('[data-count]'),
+      move: this.q('[data-move]'),
+      progress: this.q('[data-progress]'),
+      nBadge: this.q('[data-n-badge]'),
+      pieces: this.q('[data-pieces]'),
+      nInfo: this.q('[data-n-info]'),
+      solCount: this.q('[data-sol-count]'),
+      solChips: this.q('[data-sol-chips]'),
+      studio: this.q('[data-id="studio"]'),
+      swarmView: this.q('[data-id="swarm"]'),
+      swarmGrid: this.q('[data-swarm]'),
+    };
+    this.ringCirc = 2 * Math.PI * 28;
+    this.ui.ring.setAttribute('stroke-dasharray', this.ringCirc);
+    this.lanes = {};
+    ['det','beam','evo'].forEach(k => {
+      const el = this.q(`[data-lane="${k}"]`);
+      this.lanes[k] = { el, fill: el.querySelector('[data-fill]'), pct: el.querySelector('[data-pct2]'), stat: el.querySelector('[data-stat]'), star: el.querySelector('[data-star]') };
+    });
+  }
+
+  // =================== THREE ===================
+  initThree() {
+    const T = window.THREE;
+    const stage = this.ui.stage;
+    const w = stage.clientWidth || 600, h = stage.clientHeight || 400;
+    this.renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(w, h);
+    this.renderer.outputEncoding = T.sRGBEncoding;
+    this.renderer.toneMapping = T.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = T.PCFSoftShadowMap;
+    stage.appendChild(this.renderer.domElement);
+    this.renderer.domElement.style.touchAction = 'none';
+
+    this.scene = new T.Scene();
+    this.camera = new T.PerspectiveCamera(30, w / h, 0.1, 100);
+    this.camera.position.set(0, 0.35, 6.4);
+    this.camera.lookAt(0, 0, 0);
+
+    this.scene.add(new T.HemisphereLight(0xffffff, 0xd0d0d6, 0.9));
+    const key = new T.DirectionalLight(0xffffff, 0.95);
+    key.position.set(4, 7, 6);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.near = 1; key.shadow.camera.far = 30;
+    key.shadow.camera.left = -4; key.shadow.camera.right = 4;
+    key.shadow.camera.top = 4; key.shadow.camera.bottom = -4;
+    key.shadow.bias = -0.0008; key.shadow.radius = 6;
+    this.scene.add(key);
+    const fill = new T.DirectionalLight(0xffffff, 0.32);
+    fill.position.set(-5, 2, 3);
+    this.scene.add(fill);
+
+    const ground = new T.Mesh(new T.PlaneGeometry(40, 40), new T.ShadowMaterial({ opacity: 0.14 }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1.62;
+    ground.receiveShadow = true;
+    this.scene.add(ground);
+
+    this.cubeGroup = new T.Group();
+    this.cubeGroup.rotation.set(0.5, -0.62, 0);
+    this.scene.add(this.cubeGroup);
+
+    // shared sticker alpha texture (rounded square)
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 128, 128);
+    ctx.fillStyle = '#fff';
+    const r = 26, x = 6, y = 6, s = 116;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + s, y, x + s, y + s, r);
+    ctx.arcTo(x + s, y + s, x, y + s, r);
+    ctx.arcTo(x, y + s, x, y, r);
+    ctx.arcTo(x, y, x + s, y, r);
+    ctx.closePath(); ctx.fill();
+    this.stickerAlpha = new T.CanvasTexture(c);
+
+    this.bodyMat = new T.MeshStandardMaterial({ color: 0x070708, roughness: 0.5, metalness: 0.1 });
+    this.faceMats = this.faceList.map(col => { const c = new T.Color(col); return new T.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.0, alphaMap: this.stickerAlpha, alphaTest: 0.5, transparent: false, emissive: c, emissiveIntensity: 0.08 }); });
+
+    // orbit drag
+    const dom = this.renderer.domElement;
+    let px = 0, py = 0;
+    dom.addEventListener('pointerdown', (e) => { this.dragging = true; px = e.clientX; py = e.clientY; dom.setPointerCapture(e.pointerId); });
+    dom.addEventListener('pointermove', (e) => {
+      if (!this.dragging) return;
+      const dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY;
+      this.vel.x = dy * 0.006; this.vel.y = dx * 0.006;
+      this.applyOrbit(this.vel.x, this.vel.y);
+    });
+    const up = () => { this.dragging = false; };
+    dom.addEventListener('pointerup', up); dom.addEventListener('pointercancel', up);
+
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(stage);
+    this.clock = new T.Clock();
+  }
+
+  applyOrbit(rx, ry) {
+    const T = window.THREE;
+    const qx = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), rx);
+    const qy = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), ry);
+    this.cubeGroup.quaternion.premultiply(qy).premultiply(qx);
+  }
+
+  resize() {
+    if (!this.renderer) return;
+    const s = this.ui.stage;
+    const w = s.clientWidth, h = s.clientHeight;
+    if (!w || !h) return;
+    this.renderer.setSize(w, h);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  buildCube(N) {
+    if (this.cubies) this.cubies.forEach(c => this.cubeGroup.remove(c.mesh));
+    this.cubies = [];
+    this.cubieLayers = null;
+    if (this.core) { this.cubeGroup.remove(this.core); this.core = null; }
+    if (this.faceBox) { this.cubeGroup.remove(this.faceBox); this.faceBox = null; }
+    this.activeMove = null;
+    this.N = N;
+    this.mode = N <= (this.CUBIE_MAX || 11) ? 'cubie' : 'texture';
+    if (this.mode === 'texture') this.buildTextureCube(N);
+    else this.buildCubieCube(N);
+    this.updateBadges();
+  }
+
+  buildCubieCube(N) {
+    const T = window.THREE;
+    const total = 2.5;
+    const step = total / N;
+    const cubie = step * 0.95;
+    this.step = step; this.half = (N - 1) / 2;
+    // solid dark core so the gaps never reveal the far side
+    const core = new T.Mesh(new T.BoxGeometry(total * 0.9, total * 0.9, total * 0.9), this.bodyMat);
+    core.castShadow = false; core.receiveShadow = false;
+    this.cubeGroup.add(core); this.core = core;
+    const bodyGeo = new T.BoxGeometry(cubie, cubie, cubie);
+    const stGeo = new T.PlaneGeometry(cubie * 0.84, cubie * 0.84);
+    const eps = cubie * 0.5 + step * 0.012;
+    const M = { px: 5, nx: 4, py: 0, ny: 1, pz: 2, nz: 3 };
+    for (let ix = 0; ix < N; ix++) for (let iy = 0; iy < N; iy++) for (let iz = 0; iz < N; iz++) {
+      const shell = ix === 0 || ix === N - 1 || iy === 0 || iy === N - 1 || iz === 0 || iz === N - 1;
+      if (!shell) continue;
+      const mesh = new T.Mesh(bodyGeo, this.bodyMat);
+      const shadow = N <= 10;
+      mesh.castShadow = shadow; mesh.receiveShadow = shadow;
+      mesh.position.set((ix - this.half) * step, (iy - this.half) * step, (iz - this.half) * step);
+      const add = (matIdx, nx, ny, nz, rotAxis, rotAng) => {
+        const st = new T.Mesh(stGeo, this.faceMats[matIdx]);
+        st.position.set(nx * eps, ny * eps, nz * eps);
+        if (rotAxis === 'x') st.rotation.x = rotAng;
+        if (rotAxis === 'y') st.rotation.y = rotAng;
+        st.castShadow = false;
+        mesh.add(st);
+      };
+      if (ix === N - 1) add(M.px, 1, 0, 0, 'y', Math.PI / 2);
+      if (ix === 0) add(M.nx, -1, 0, 0, 'y', -Math.PI / 2);
+      if (iy === N - 1) add(M.py, 0, 1, 0, 'x', -Math.PI / 2);
+      if (iy === 0) add(M.ny, 0, -1, 0, 'x', Math.PI / 2);
+      if (iz === N - 1) add(M.pz, 0, 0, 1, 'y', 0);
+      if (iz === 0) add(M.nz, 0, 0, -1, 'y', Math.PI);
+      mesh.userData.idx = [ix, iy, iz];
+      this.cubeGroup.add(mesh);
+      this.cubies.push({ mesh });
+    }
+    this.buildCubieLayerIndex();
+  }
+
+  buildCubieLayerIndex() {
+    this.cubieLayers = Array.from({ length: 3 }, () =>
+      Array.from({ length: this.N }, () => new Set())
+    );
+    this.cubies.forEach(c => {
+      const idx = c.mesh.userData.idx;
+      for (let axis = 0; axis < 3; axis++) this.cubieLayers[axis][idx[axis]].add(c);
+    });
+  }
+
+  updateCubieLayerIndex(c, prevIdx, nextIdx, fixedAxis) {
+    for (let axis = 0; axis < 3; axis++) {
+      if (axis === fixedAxis || prevIdx[axis] === nextIdx[axis]) continue;
+      this.cubieLayers[axis][prevIdx[axis]].delete(c);
+      this.cubieLayers[axis][nextIdx[axis]].add(c);
+    }
+  }
+
+  buildTextureCube(N) {
+    const T = window.THREE;
+    const total = 2.5;
+    const d = Math.min(N, 96);
+    const solvedIdx = [5, 4, 0, 1, 2, 3]; // px,nx,py,ny,pz,nz -> r,o,w,y,g,b
+    this.texFaces = [];
+    const mats = [];
+    for (let f = 0; f < 6; f++) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+      const tex = new T.CanvasTexture(cv);
+      tex.anisotropy = 4;
+      const face = { cv, ctx: cv.getContext('2d'), tex, d, solvedColor: this.faceList[solvedIdx[f]], scr: [] };
+      for (let i = 0; i < d * d; i++) face.scr.push(this.faceList[Math.floor(Math.random() * 6)]);
+      this.texFaces.push(face);
+      mats.push(new T.MeshStandardMaterial({ map: tex, roughness: 0.42, metalness: 0.0 }));
+    }
+    const box = new T.Mesh(new T.BoxGeometry(total, total, total), mats);
+    box.castShadow = true; box.receiveShadow = true;
+    this.cubeGroup.add(box); this.faceBox = box;
+    this.step = total / N; this.half = (N - 1) / 2;
+    for (let f = 0; f < 6; f++) this.drawFace(f, 1);
+  }
+
+  roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  drawFace(f, frac) {
+    const face = this.texFaces[f];
+    if (!face) return;
+    const d = face.d, ctx = face.ctx, S = 512, cell = S / d;
+    ctx.fillStyle = '#0a0b0d'; ctx.fillRect(0, 0, S, S);
+    const total = d * d, k = Math.floor(frac * total);
+    const gap = Math.max(0.5, cell * 0.09), rad = Math.min(cell * 0.2, 7);
+    for (let row = 0; row < d; row++) for (let col = 0; col < d; col++) {
+      const rank = row * d + col;
+      ctx.fillStyle = rank < k ? face.solvedColor : face.scr[rank];
+      const x = col * cell + gap, y = row * cell + gap, w = cell - gap * 2, h = cell - gap * 2;
+      this.roundRect(ctx, x, y, w, h, Math.min(rad, w / 2)); ctx.fill();
+    }
+    face.tex.needsUpdate = true;
+  }
+
+  advanceTexture(dt) {
+    const speedK = 0.52 / this.speedDur;
+    const dur = (this.phase === 'scrambling' ? 1.3 : 2.8) / speedK;
+    this.texProg = Math.min(1, this.texProg + dt / dur);
+    const solving = this.phase === 'solving';
+    const frac = solving ? this.texProg : (1 - this.texProg);
+    for (let f = 0; f < 6; f++) this.drawFace(f, frac);
+    const est = this.totalMoves || 1;
+    this.movesDone = Math.floor(this.texProg * est);
+    this.setSolvedPct(frac);
+    this.ui.count.textContent = `≈ ${this.movesDone.toLocaleString()} / ${est.toLocaleString()}`;
+    this.ui.move.style.display = 'none';
+    if (solving) { this.updateLanes(this.texProg); this.ui.status.textContent = 'Solving · reduction sweep'; }
+    else this.ui.status.textContent = 'Scrambling';
+    if (this.texProg >= 1) this.onPhaseComplete();
+  }
+
+  scrambleTexture() {
+    this.texFaces.forEach(face => { for (let i = 0; i < face.d * face.d; i++) face.scr[i] = this.faceList[Math.floor(Math.random() * 6)]; });
+    this.phase = 'scrambling'; this.busy = true; this.scrambled = true;
+    this.texProg = 0; this.totalMoves = Math.round(0.35 * this.N * this.N); this.movesDone = 0;
+    this.resetLanes();
+    this.ui.count.style.display = 'inline-block';
+    this.syncControls();
+  }
+
+  solveTexture() {
+    this.phase = 'solving'; this.busy = true; this.texProg = 0;
+    this.totalMoves = Math.round(0.35 * this.N * this.N); this.movesDone = 0;
+    this.startLanes();
+    this.ui.count.style.display = 'inline-block';
+    this.syncControls();
+  }
+
+  updateBadges() {
+    this.ui.nBadge.textContent = `${this.N}×${this.N}`;
+    const pieces = this.N === 1 ? 1 : (6 * this.N * this.N - 12 * this.N + 8);
+    this.ui.pieces.textContent = `${pieces.toLocaleString()} pieces`;
+    const pcsStr = pieces >= 1e9 ? (pieces / 1e9).toFixed(1) + 'B' : pieces >= 1e6 ? (pieces / 1e6).toFixed(1) + 'M' : pieces.toLocaleString();
+    this.ui.nInfo.textContent = `${this.N.toLocaleString()}³ · ${pcsStr} pcs`;
+  }
+
+  // ---- moves ----
+  randMove() {
+    const axis = Math.floor(Math.random() * 3);
+    const layer = Math.floor(Math.random() * this.N);
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return { axis, layer, dir };
+  }
+
+  axisVec(axis) {
+    const T = window.THREE;
+    return axis === 0 ? new T.Vector3(1, 0, 0) : axis === 1 ? new T.Vector3(0, 1, 0) : new T.Vector3(0, 0, 1);
+  }
+
+  // Rotate lattice indices exactly instead of rounding rotated world positions.
+  // On even cubes the legal coordinates are half-step offsets; rounding them to
+  // integer step multiples makes cubies drift, collide, and eventually fly apart.
+  rotatedIdx(idx, m) {
+    const hi = this.N - 1;
+    const [x, y, z] = idx;
+    if (m.axis === 0) return m.dir > 0 ? [x, hi - z, y] : [x, z, hi - y];
+    if (m.axis === 1) return m.dir > 0 ? [z, y, hi - x] : [hi - z, y, x];
+    return m.dir > 0 ? [hi - y, x, z] : [y, hi - x, z];
+  }
+
+  positionForIdx(idx) {
+    const T = window.THREE;
+    return new T.Vector3(
+      (idx[0] - this.half) * this.step,
+      (idx[1] - this.half) * this.step,
+      (idx[2] - this.half) * this.step,
+    );
+  }
+
+  startMove(m) {
+    const T = window.THREE;
+    const sel = Array.from(this.cubieLayers[m.axis][m.layer]);
+    const pivot = new T.Group();
+    this.cubeGroup.add(pivot);
+    sel.forEach(c => {
+      c._p0 = c.mesh.position.clone();
+      c._q0 = c.mesh.quaternion.clone();
+      pivot.attach(c.mesh);
+    });
+    const total = 2.5;
+    const sizes = [total * 1.04, total * 1.04, total * 1.04];
+    sizes[m.axis] = this.step * 1.06;
+    const slab = new T.Mesh(new T.BoxGeometry(sizes[0], sizes[1], sizes[2]), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false, blending: T.AdditiveBlending }));
+    slab.position[['x','y','z'][m.axis]] = (m.layer - this.half) * this.step;
+    pivot.add(slab);
+    // Per-move duration: keep the leisurely default for short (3×3) solutions, but scale
+    // down for long reduction solutions so the whole replay stays ~14 s at Normal speed
+    // (floored at ~one frame). Without this a 475-move 4×4 reduction solve, at 0.52 s/move,
+    // would animate for 4 minutes (and an 8×8 for over half an hour).
+    const _scale = Math.min(1, 26.9 / Math.max(1, this.totalMoves));
+    const _dur = Math.max(0.014, this.speedDur * _scale);
+    this.activeMove = { m, sel, pivot, slab, t: 0, dur: _dur, axisName: ['x','y','z'][m.axis] };
+  }
+
+  finalizeMove() {
+    const T = window.THREE;
+    const a = this.activeMove;
+    const qMove = new T.Quaternion().setFromAxisAngle(this.axisVec(a.m.axis), a.m.dir * Math.PI / 2);
+    a.sel.forEach(c => {
+      const prevIdx = c.mesh.userData.idx;
+      const nextIdx = this.rotatedIdx(prevIdx, a.m);
+      this.updateCubieLayerIndex(c, prevIdx, nextIdx, a.m.axis);
+      c.mesh.position.copy(this.positionForIdx(nextIdx));
+      c.mesh.quaternion.copy(qMove.clone().multiply(c._q0));
+      this.cubeGroup.add(c.mesh);
+      c.mesh.userData.idx = nextIdx;
+    });
+    this.cubeGroup.remove(a.pivot);
+    this.activeMove = null;
+  }
+
+  applyInstant(m) {
+    const T = window.THREE;
+    const sel = this.cubieLayers[m.axis][m.layer];
+    const qMove = new T.Quaternion().setFromAxisAngle(this.axisVec(m.axis), m.dir * Math.PI / 2);
+    sel.forEach(c => {
+      const prevIdx = c.mesh.userData.idx;
+      const nextIdx = this.rotatedIdx(prevIdx, m);
+      this.updateCubieLayerIndex(c, prevIdx, nextIdx, m.axis);
+      c.mesh.position.copy(this.positionForIdx(nextIdx));
+      c.mesh.quaternion.premultiply(qMove);
+      c.mesh.userData.idx = nextIdx;
+    });
+  }
+
+  // ---- phases ----
+  scramble() {
+    if (this.busy) return;
+    this.resetSolved(true);
+    if (this.mode === 'texture') return this.scrambleTexture();
+    const depth = this.scrambleDepth;
+    this.lastScramble = [];
+    let prev = -1;
+    for (let i = 0; i < depth; i++) {
+      let m = this.randMove();
+      while (m.axis === prev && Math.random() < 0.6) m = this.randMove();
+      prev = m.axis;
+      this.lastScramble.push(m);
+    }
+    this.queue = this.lastScramble.slice();
+    this.phase = 'scrambling'; this.busy = true; this.scrambled = true;
+    this.movesDone = 0; this.totalMoves = depth;
+    this.resetLanes();
+    this.ui.count.style.display = 'inline-block';
+    this.syncControls();
+  }
+
+  solve() {
+    if (this.busy || !this.scrambled) return;
+    if (this.mode === 'texture') return this.solveTexture();
+    const inv = this.lastScramble.slice().reverse().map(m => ({ axis: m.axis, layer: m.layer, dir: -m.dir }));
+    this.lastSolution = inv;
+    this.queue = inv.slice();
+    this.phase = 'solving'; this.busy = true;
+    this.movesDone = 0; this.totalMoves = inv.length;
+    this.startLanes();
+    this.ui.count.style.display = 'inline-block';
+    this.syncControls();
+  }
+
+  replay() {
+    if (this.busy) return;
+    if (this.mode === 'texture') {
+      if (!this.texFaces) return;
+      this.scrambled = true;
+      for (let f = 0; f < 6; f++) this.drawFace(f, 0);
+      return this.solveTexture();
+    }
+    if (this.lastScramble.length === 0) return;
+    this.buildCube(this.n);
+    this.lastScramble.forEach(m => this.applyInstant(m));
+    this.scrambled = true;
+    this.solve();
+  }
+
+  resetSolved(silent) {
+    if (this.busy && !silent) return;
+    this.buildCube(this.n);
+    this.queue = []; this.activeMove = null;
+    this.phase = 'idle'; this.scrambled = false; this.busy = false;
+    this.movesDone = 0; this.totalMoves = 0; this.solveProgress = 1;
+    if (!silent) {
+      this.resetLanes();
+      this.ui.count.style.display = 'none';
+      this.ui.move.style.display = 'none';
+      this.setSolvedPct(1);
+      this.ui.status.textContent = 'Solved — scramble to begin';
+      this.ui.solCount.textContent = '—';
+      this.ui.solChips.innerHTML = '<span style="font-size:12.5px;color:#B7B3AA;">Solve a scramble to see the winning path.</span>';
+      this.syncControls();
+    }
+  }
+
+  onPhaseComplete() {
+    this.ui.move.style.display = 'none';
+    if (this.phase === 'scrambling') {
+      this.phase = 'idle'; this.busy = false;
+      this.ui.status.textContent = 'Scrambled — ready to solve';
+      this.setSolvedPct(this.mode === 'texture' ? 0 : 0.04);
+      this.ui.count.style.display = 'none';
+    } else if (this.phase === 'solving') {
+      this.phase = 'idle'; this.busy = false; this.scrambled = false; this.hasSolution = true;
+      this.setSolvedPct(1);
+      this.ui.status.textContent = 'Solved ✓';
+      this.ui.count.style.display = 'none';
+      this.finishLanes();
+      this.showSolution();
+    }
+    this.syncControls();
+  }
+
+  // ---- HUD ----
+  setSolvedPct(f) {
+    f = Math.max(0, Math.min(1, f));
+    this.ui.ring.setAttribute('stroke-dashoffset', this.ringCirc * (1 - f));
+    this.ui.pct.textContent = Math.round(f * 100);
+    if (this.ui.progress) {
+      const pct = Math.round(f * 100);
+      this.ui.progress.style.width = pct + '%';
+      this.ui.progress.setAttribute('aria-valuenow', String(pct));
+    }
+  }
+
+  notation(m) {
+    const N = this.N;
+    const outer = m.layer === N - 1, inner0 = m.layer === 0;
+    const L = ['x','y','z'][m.axis];
+    let ch;
+    if (m.axis === 0) ch = outer ? 'R' : inner0 ? 'L' : `${m.layer}r`;
+    else if (m.axis === 1) ch = outer ? 'U' : inner0 ? 'D' : `${m.layer}u`;
+    else ch = outer ? 'F' : inner0 ? 'B' : `${m.layer}f`;
+    return ch + (m.dir < 0 ? "'" : '');
+  }
+
+  updateHUD() {
+    const partial = this.activeMove ? Math.min(this.activeMove.t / this.activeMove.dur, 1) : 0;
+    const frac = this.totalMoves ? (this.movesDone + partial) / this.totalMoves : 0;
+    if (this.phase === 'scrambling') {
+      this.setSolvedPct(1 - frac);
+      this.ui.count.textContent = `${this.movesDone} / ${this.totalMoves}`;
+      const cur = this.queue[0] || this.activeMove?.m;
+      if (cur) { if (this.ui.status.textContent !== 'Scrambling') this.ui.status.textContent = 'Scrambling'; this.ui.move.textContent = this.notation(cur); this.ui.move.style.display = 'inline-block'; }
+    } else if (this.phase === 'solving') {
+      this.solveProgress = frac;
+      this.setSolvedPct(frac);
+      this.ui.count.textContent = `${this.movesDone} / ${this.totalMoves}`;
+      this.updateLanes(frac);
+      const cur = this.queue[0] || this.activeMove?.m;
+      if (cur) { const solveStatus = this._lastSolveTelemetry?.verified ? 'Replaying verified solution' : 'Solving'; if (this.ui.status.textContent !== solveStatus) this.ui.status.textContent = solveStatus; this.ui.move.textContent = this.notation(cur); this.ui.move.style.display = 'inline-block'; }
+    }
+  }
+
+  // ---- lanes ----
+  resetLanes() {
+    Object.values(this.lanes).forEach(l => {
+      l.fill.style.width = '0%'; l.pct.textContent = '0%'; l.stat.textContent = 'idle';
+      l.star.style.display = 'none'; l.pct.style.color = '#A6A299';
+    });
+  }
+  startLanes() {
+    this.resetLanes();
+    Object.values(this.lanes).forEach(l => l.stat.textContent = 'searching…');
+  }
+  updateLanes(f) {
+    const small = this.n <= 4;
+    const curves = small ? { det: 0.62, beam: 1.05, evo: 1.5 } : { det: 1.6, beam: 1.1, evo: 0.66 };
+    const nodes = Math.round(f * (small ? 41000 : 268000));
+    [['det',5800],['beam',3100],['evo',9400]].forEach(([k, mul]) => {
+      const w = Math.min(1, Math.pow(f, curves[k]));
+      const l = this.lanes[k];
+      l.fill.style.width = (w * 100).toFixed(1) + '%';
+      l.pct.textContent = Math.round(w * 100) + '%';
+      l.stat.textContent = `${(nodes * (mul/5800)).toFixed(0)} nodes · gen ${Math.round(f * (k==='evo'?180:40))}`;
+    });
+  }
+  finishLanes() {
+    const small = this.n <= 4;
+    const winner = small ? 'det' : 'evo';
+    const moves = this.lastSolution.length;
+    Object.entries(this.lanes).forEach(([k, l]) => {
+      if (k === winner) {
+        l.fill.style.width = '100%'; l.pct.textContent = '100%'; l.pct.style.color = '#1BA64B';
+        l.stat.textContent = `verified · ${moves} moves`; l.star.style.display = 'inline';
+      } else {
+        const w = 82 + Math.random() * 12;
+        l.fill.style.width = w.toFixed(0) + '%'; l.pct.textContent = w.toFixed(0) + '%';
+        l.stat.textContent = 'budget exhausted';
+      }
+    });
+  }
+
+  showSolution() {
+    if (this.mode === 'texture') {
+      this.ui.solCount.textContent = this.totalMoves.toLocaleString();
+      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">Reduction method — centers → edge pairing → reduced 3×3 + parity. ≈' + this.totalMoves.toLocaleString() + ' moves (O(N²)), too many to list.</span>';
+      return;
+    }
+    const moves = this.lastSolution;
+    this.ui.solCount.textContent = moves.length;
+    this.ui.solChips.innerHTML = '';
+    moves.forEach(m => {
+      const s = document.createElement('span');
+      s.textContent = this.notation(m);
+      s.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:3px 7px;background:#F4F3EF;border-radius:6px;color:#3a3933;";
+      this.ui.solChips.appendChild(s);
+    });
+  }
+
+  copyPath() {
+    const txt = this.lastSolution.map(m => this.notation(m)).join(' ');
+    if (txt && navigator.clipboard) {
+      navigator.clipboard.writeText(txt);
+      const btn = this.q('[data-copy]');
+      const o = btn.innerHTML;
+      btn.innerHTML = '<span style="font-size:12px;color:#1BA64B;">Copied ✓</span>';
+      setTimeout(() => btn.innerHTML = o, 1200);
+    }
+  }
+
+  // ---- controls / settings ----
+  setView(v) {
+    this.view = v;
+    this.ui.studio.style.display = v === 'studio' ? 'flex' : 'none';
+    this.ui.studio.hidden = v !== 'studio';
+    this.ui.swarmView.style.display = v === 'swarm' ? 'flex' : 'none';
+    this.ui.swarmView.hidden = v !== 'swarm';
+    if (v === 'studio') setTimeout(() => this.resize(), 30);
+    // A solved Studio cube gives the swarm nothing to learn (every trial is instantly
+    // solved and the wall is all green). Auto-scramble on entry so the swarm immediately
+    // shows the agents actually learning to solve.
+    if (v === 'swarm' && !this.scrambled && !this.busy) this.scramble();
+    this.syncControls();
+  }
+  // Product sizes stay inside the desktop solver's replay-verified range. The
+  // wiring layer lowers this ceiling to 5 in the standalone browser build.
+  sliderToN(pos) { return Math.max(2, Math.min(this.CUBIE_MAX || 11, Math.round(pos))); }
+  nToSlider(n) { return Math.max(2, Math.min(this.CUBIE_MAX || 11, Math.round(n))); }
+  setN(n) {
+    if (this.busy) return;
+    n = Math.max(2, Math.min(this.CUBIE_MAX || 11, n));
+    if (n === this.n) return;
+    this.n = n;
+    this.resetSolved();
+  }
+  setSpeed(s) {
+    this.speedDur = s === 'slow' ? 0.9 : s === 'fast' ? 0.26 : 0.52;
+    this.speed = s; this.syncControls();
+  }
+  setSwarmCount(c) { this.swarmCount = c; this.initSwarm(); this.syncControls(); }
+
+  syncControls() {
+    // view toggle
+    this.qa('[data-view]').forEach(b => {
+      const on = b.dataset.view === this.view;
+      b.style.background = on ? '#fff' : 'transparent';
+      b.style.color = on ? '#161514' : '#8C887F';
+      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.12)' : 'none';
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    // N presets
+    this.qa('[data-n]').forEach(b => {
+      const on = parseInt(b.dataset.n, 10) === this.n;
+      b.style.background = on ? '#161514' : '#F4F3EF';
+      b.style.color = on ? '#fff' : '#6E6A61';
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const nsl = this.q('[data-nslider]'); if (nsl) nsl.value = this.nToSlider(this.n);
+    const nv = this.q('[data-nval]'); if (nv) nv.textContent = `${this.n}×${this.n}`;
+    // speed
+    this.qa('[data-speed]').forEach(b => {
+      const on = b.dataset.speed === (this.speed || 'normal');
+      b.style.background = on ? '#fff' : 'transparent';
+      b.style.color = on ? '#161514' : '#8C887F';
+      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
+      b.setAttribute('aria-pressed', String(on));
+    });
+    // swarm count + speed
+    this.qa('[data-count]').forEach(b => {
+      const on = parseInt(b.dataset.count, 10) === this.swarmCount;
+      b.style.background = on ? '#fff' : 'transparent';
+      b.style.color = on ? '#161514' : '#8C887F';
+      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
+      b.setAttribute('aria-pressed', String(on));
+    });
+    this.qa('[data-sspeed]').forEach(b => {
+      const on = (b.dataset.sspeed === 'lively') === (this.swarmSpeed > 1.5);
+      b.style.background = on ? '#fff' : 'transparent';
+      b.style.color = on ? '#161514' : '#8C887F';
+      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
+      b.setAttribute('aria-pressed', String(on));
+    });
+    // spin toggle
+    const spin = this.q('[data-spin]');
+    spin.style.color = this.autoSpin ? '#161514' : '#B7B3AA';
+    spin.setAttribute('aria-pressed', String(this.autoSpin));
+    // buttons enable
+    const dis = (el, off) => {
+      if (!el) return;
+      el.disabled = !!off;
+      el.setAttribute('aria-disabled', String(!!off));
+      el.style.opacity = off ? '.4' : '1';
+      el.style.pointerEvents = off ? 'none' : 'auto';
+    };
+    dis(this.q('[data-act-scramble]'), this.busy);
+    dis(this.q('[data-act-solve]'), this.busy || !this.scrambled);
+    dis(this.q('[data-act-replay]'), this.busy || this.lastScramble.length === 0);
+    dis(this.q('[data-act-reset]'), this.busy);
+    this.qa('[data-n],[data-inc],[data-dec]').forEach(b => dis(b, this.busy));
+  }
+
+  // =================== SWARM ===================
+  initSwarm() {
+    const grid = this.ui.swarmGrid;
+    grid.innerHTML = '';
+    this.cards = [];
+    const faces = this.faceList;
+    const faces6 = [this.PAL.w, this.PAL.g, this.PAL.r, this.PAL.b, this.PAL.o, this.PAL.y]; // top,front,right,back,left,bottom
+    for (let i = 0; i < this.swarmCount; i++) {
+      const card = document.createElement('div');
+      card.style.cssText = 'position:relative;height:154px;background:#fff;border:1px solid #ECEAE4;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 1px 2px rgba(20,20,18,.03);overflow:hidden;transition:box-shadow .3s,border-color .3s;';
+      const ringSize = 90, rr = 39, circ = 2 * Math.PI * rr;
+      const cellsHtml = () => {
+        let h = '';
+        for (let k = 0; k < 9; k++) h += '<div data-cell style="border-radius:3px;background:#1a1c20;"></div>';
+        return h;
+      };
+      const fs = (extra) => `position:absolute;width:38px;height:38px;left:16px;top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;background:#0a0b0d;border-radius:5px;backface-visibility:hidden;${extra}`;
+      card.innerHTML = `
+        <div style="position:relative;width:${ringSize}px;height:${ringSize}px;display:flex;align-items:center;justify-content:center;">
+          <svg width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}" style="position:absolute;inset:0;">
+            <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${rr}" stroke="#EFEDE7" stroke-width="4" fill="none"/>
+            <circle data-cring cx="${ringSize/2}" cy="${ringSize/2}" r="${rr}" stroke="${this.accent}" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ}" transform="rotate(-90 ${ringSize/2} ${ringSize/2})"/>
+          </svg>
+          <div style="perspective:260px;width:70px;height:70px;">
+            <div data-inner style="position:relative;width:70px;height:70px;transform-style:preserve-3d;transform:rotateX(-20deg) rotateY(-37deg);">
+              <div style="${fs('transform:rotateX(90deg) translateZ(19px);')}">${cellsHtml()}</div>
+              <div style="${fs('transform:translateZ(19px);')}">${cellsHtml()}</div>
+              <div style="${fs('transform:rotateY(90deg) translateZ(19px);')}">${cellsHtml()}</div>
+              <div style="${fs('transform:rotateY(180deg) translateZ(19px);')}">${cellsHtml()}</div>
+              <div style="${fs('transform:rotateY(-90deg) translateZ(19px);')}">${cellsHtml()}</div>
+              <div style="${fs('transform:rotateX(-90deg) translateZ(19px);')}">${cellsHtml()}</div>
+            </div>
+          </div>
+          <div data-check style="position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#00A24B;display:none;align-items:center;justify-content:center;color:#fff;font-size:11px;">✓</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#A6A299;font-family:'JetBrains Mono',monospace;">
+          <span>#${String(i + 1).padStart(2, '0')}</span>
+          <span data-cnt style="color:#C7C3BA;">54 off</span>
+        </div>`;
+      grid.appendChild(card);
+      const cellEls = Array.from(card.querySelectorAll('[data-cell]'));
+      const solvedCol = cellEls.map((_, k) => faces6[Math.floor(k / 9)]);
+      const cardObj = {
+        card, inner: card.querySelector('[data-inner]'), cring: card.querySelector('[data-cring]'), check: card.querySelector('[data-check]'),
+        cnt: card.querySelector('[data-cnt]'), cells: cellEls, solvedCol, circ,
+        prog: 0, applied: -1, speed: 0.16 + Math.random() * 0.24, delay: Math.random() * 2.4,
+        order: this.shuffle([...Array(54).keys()]), state: 'run', restT: 0, scr: [],
+        rot: Math.random() * 360, spin: 9 + Math.random() * 15,
+      };
+      this.rescr(cardObj);
+      this.cards.push(cardObj);
+    }
+    this.cumulativeSolves = 0;
+    this.swarmFrame = 0;
+  }
+
+  shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  rescr(c) {
+    c.scr = c.cells.map(() => this.faceList[Math.floor(Math.random() * 6)]);
+    c.cells.forEach((el, k) => el.style.background = c.scr[k]);
+    c.applied = 0;
+  }
+
+  updateSwarm(dt) {
+    let solvingNow = 0, progSum = 0;
+    const g = this.swarmSpeed;
+    for (const c of this.cards) {
+      if (!this.reducedMotion) {
+        c.rot += dt * c.spin;
+        if (c.inner) c.inner.style.transform = `rotateX(-20deg) rotateY(${c.rot}deg)`;
+      }
+      if (c.delay > 0) { c.delay -= dt; solvingNow++; continue; }
+      if (c.state === 'run') {
+        solvingNow++;
+        c.prog = Math.min(1, c.prog + dt * c.speed * g);
+        const target = Math.floor(c.prog * 54);
+        while (c.applied < target) {
+          const idx = c.order[c.applied];
+          if (c.cells[idx]) c.cells[idx].style.background = c.solvedCol[idx];
+          c.applied++;
+        }
+        c.cring.style.strokeDashoffset = c.circ * (1 - c.prog);
+        const off = 54 - c.applied;
+        c.cnt.textContent = off + ' off';
+        if (c.prog >= 1) {
+          c.state = 'rest'; c.restT = 0;
+          c.cring.style.stroke = '#00A24B'; c.check.style.display = 'flex';
+          c.cnt.textContent = 'solved'; c.cnt.style.color = '#1BA64B';
+          c.card.style.borderColor = '#CDEAD4'; c.card.style.boxShadow = '0 4px 16px -6px rgba(27,166,75,.4)';
+          c.check.style.animation = 'pop .4s ease';
+          this.cumulativeSolves++;
+        }
+      } else {
+        c.restT += dt;
+        if (c.restT > 1.1 + Math.random()) {
+          c.state = 'run'; c.prog = 0; c.applied = 0;
+          c.order = this.shuffle([...Array(54).keys()]);
+          c.speed = 0.18 + Math.random() * 0.28;
+          c.cring.style.stroke = this.accent; c.cring.style.strokeDashoffset = c.circ;
+          c.check.style.display = 'none'; c.check.style.animation = '';
+          c.cnt.style.color = '#C7C3BA';
+          c.card.style.borderColor = '#ECEAE4'; c.card.style.boxShadow = '0 1px 2px rgba(20,20,18,.03)';
+          this.rescr(c);
+        }
+      }
+      progSum += c.prog;
+    }
+    // header stats throttled
+    this.swarmFrame = (this.swarmFrame || 0) + 1;
+    if (this.swarmFrame % 4 === 0) {
+      const total = this.q('[data-swarm-total]'); if (total) total.textContent = this.cumulativeSolves.toLocaleString();
+      const run = this.q('[data-swarm-run]'); if (run) run.textContent = solvingNow;
+      const avg = this.q('[data-swarm-avg]'); if (avg) avg.textContent = Math.round((progSum / Math.max(1, this.cards.length)) * 100) + '%';
+    }
+  }
+
+  // =================== LOOP ===================
+  loop() {
+    const T = window.THREE;
+    const tick = () => {
+      this._raf = requestAnimationFrame(tick);
+      const dt = Math.min(this.clock.getDelta(), 0.05);
+
+      // move animation
+      if (this.mode === 'texture') {
+        if (this.busy) this.advanceTexture(dt);
+      } else if (this.activeMove) {
+        const a = this.activeMove;
+        a.t += dt;
+        const p = Math.min(a.t / a.dur, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        a.pivot.rotation[a.axisName] = a.m.dir * (Math.PI / 2) * e;
+        if (a.t >= a.dur) {
+          this.finalizeMove(); this.movesDone++;
+          // Batch very long (reduction) solutions: advance extra moves instantly this frame
+          // so the whole replay stays ~14 s (≈840 frames) instead of one-move-per-frame — a
+          // 24k-move solve would otherwise take ~7 min even after the per-move speed-up, and
+          // an 8×8 (~3.8k) ~50 s. Short 3×3 solves keep one move per frame (extra = 0).
+          let extra = Math.ceil(this.totalMoves / 840) - 1;
+          while (extra-- > 0 && this.queue.length) { this.applyInstant(this.queue.shift()); this.movesDone++; }
+          this.updateHUD();
+        }
+        else this.updateHUD();
+      } else if (this.queue.length) {
+        this.startMove(this.queue.shift());
+      } else if (this.busy) {
+        this.onPhaseComplete();
+      }
+
+      // idle auto-orbit + momentum
+      if (this.view === 'studio') {
+        if (!this.dragging) {
+          if (Math.abs(this.vel.x) > 0.0001 || Math.abs(this.vel.y) > 0.0001) {
+            this.applyOrbit(this.vel.x * 0.9, this.vel.y * 0.9);
+            this.vel.x *= 0.9; this.vel.y *= 0.9;
+          } else if (this.autoSpin && !this.activeMove && !this.scrambled) {
+            this.cubeGroup.rotation.y += 0.0024;
+          }
+        }
+        this.renderer.render(this.scene, this.camera);
+      } else if (this.view === 'swarm') {
+        this.updateSwarm(dt);
+      }
+    };
+    tick();
+  }
+
+  componentWillUnmount() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    if (this.ro) this.ro.disconnect();
+    if (this.onKey) window.removeEventListener('keydown', this.onKey);
+    if (this.onTabKey && this.root) this.root.removeEventListener('keydown', this.onTabKey);
+  }
+}
+
+
+  // ===== wire the real Rust solver (WASM) into the design =====
+  function wireRealSolver(inst){
+    // Engine id -> lane slot. The 3×3 is solved by the two-phase (Kociemba) solver,
+    // which reuses the first ('det') lane slot — relabeled "Two-phase" for N=3 by
+    // applyEngineLabels(), with the other two lanes hidden (they only run for 2×2).
+    const KEYS = { deterministic:'det', beam:'beam', evolution:'evo', kociemba:'det', reduction:'det', rcube:'det' };
+    const origScramble = inst.scramble.bind(inst);
+    const origReset = inst.resetSolved ? inst.resetSolved.bind(inst) : null;
+    const origSetN = inst.setN ? inst.setN.bind(inst) : null;
+    const origSetView = inst.setView ? inst.setView.bind(inst) : null;
+    const origBuildCube = inst.buildCube ? inst.buildCube.bind(inst) : null;
+    const origFinalizeMove = inst.finalizeMove ? inst.finalizeMove.bind(inst) : null;
+
+    inst.scrambleDepth = 200;
+    const sd = inst.root.querySelector('[data-scramble]'); if (sd) sd.value = 200;
+    const sdv = inst.root.querySelector('[data-scramble-val]'); if (sdv) sdv.textContent = '200';
+
+    function lanesUpdate(self, lanes, winnerKey, moves){
+      ['det','beam','evo'].forEach(k=>{
+        const el = self.root.querySelector('[data-lane="'+k+'"]'); if(!el) return;
+        const st = el.querySelector('[data-star]'); if(st) st.style.display='none';
+      });
+      (lanes||[]).forEach(L=>{
+        const k = KEYS[L.id]; if(!k) return;
+        const el = self.root.querySelector('[data-lane="'+k+'"]'); if(!el) return;
+        const fill=el.querySelector('[data-fill]'), pct=el.querySelector('[data-pct2]'),
+              stat=el.querySelector('[data-stat]'), star=el.querySelector('[data-star]');
+        const isWin = (k===winnerKey);
+        const p = isWin?100:Math.max(0,Math.min(100,(L.pct|0)));
+        if(fill) fill.style.width = p+'%';
+        if(pct){ pct.textContent = p+'%'; pct.style.color = (L.solved||isWin)?'#1BA64B':''; }
+        if(stat) stat.textContent = isWin ? ('verified · '+moves+' moves') : (L.solved?'solved':(L.label||'searching…'));
+        if(star) star.style.display = isWin ? 'inline' : 'none';
+      });
+    }
+
+    if (origReset) inst.resetSolved = function(silent){
+      abortPendingSolve(this);   // a pending solve must not land on a reset/rescrambled cube
+      origReset(silent);
+      if (this.lab){ this.lab.set_size(this.n); this.lab.reset(); }
+      if (!silent){ clearScrambleHistory(this,true); if (this._refreshCustomScramble) this._refreshCustomScramble(this); }
+    };
+    if (origSetN) inst.setN = function(n){
+      var cap = SOLVE_MAX_N || 11;
+      n = Math.max(2, Math.min(cap, Math.round(Number(n)||2)));
+      if (n===this.n) return;
+      var previousN = this.n;
+      var preserveDefaultDepth = this.scrambleDepth === defaultScrambleDepth(previousN);
+      abortPendingSolve(this);   // changing N invalidates an in-flight solve's moves
+      origSetN(n);
+      if (preserveDefaultDepth){
+        this.scrambleDepth = defaultScrambleDepth(this.n);
+        var depthInput = this.root.querySelector('[data-scramble]');
+        if (depthInput) depthInput.value = String(this.scrambleDepth);
+        var depthValue = this.root.querySelector('[data-scramble-val]');
+        if (depthValue) depthValue.textContent = String(this.scrambleDepth);
+      }
+      clearScrambleHistory(this,true);   // a new N invalidates every move and solution
+      if (this.lab){ this.lab.set_size(this.n); this.lab.reset(); }
+      if (this._refreshSolvability) this._refreshSolvability(this);
+      if (this._refreshCustomScramble) this._refreshCustomScramble(this);
+    };
+    inst.replay = function(){
+      if (this.busy||this._solvePending||!this.lastScramble.length||!this.lastSolution.length) return;
+      if (!rebuildFromScrambleHistory(this)) return;
+      // Keep the Rust-side state at the replay target while the visible cube animates.
+      this.lastSolution.forEach((function(m){ this.lab.apply_design_move(m.axis,m.layer,m.dir); }).bind(this));
+      if (!this.lab.is_solved()){ if(this.ui&&this.ui.status)this.ui.status.textContent='Replay verification failed'; return; }
+      this.queue=this.lastSolution.slice(); this.movesDone=0; this.totalMoves=this.queue.length;
+      this.phase='solving'; this.busy=true; this.scrambled=true; this.hasSolution=false;
+      if(this.ui&&this.ui.status)this.ui.status.textContent='Replaying verified solution';
+      if(this.ui&&this.ui.count)this.ui.count.style.display='inline-block';
+      if(this.syncControls)this.syncControls();
+    };
+
+    // ---- GPU memory: free three.js geometries/textures instead of leaking them ----
+    // buildCube() rebuilt the cube and per-move slabs were dropped from the scene
+    // without .dispose(), leaking ~6 MB per texture-cube rebuild — a size-slider
+    // drag could leak 100 MB+ and crash the webview. Shared materials
+    // (bodyMat / faceMats) are reused across builds, so they are never freed.
+    function disposeCube(self){
+      if (!window.THREE || !self.cubeGroup) return;
+      var shared = new Set();
+      if (self.bodyMat) shared.add(self.bodyMat);
+      (self.faceMats || []).forEach(function(m){ shared.add(m); });
+      var geos = new Set();
+      (function scrub(o){
+        if (!o) return;
+        if (o.geometry) geos.add(o.geometry);
+        var m = o.material;
+        if (m) (Array.isArray(m) ? m : [m]).forEach(function(mm){
+          if (mm && !shared.has(mm)){
+            if (mm.map && mm.map.dispose) mm.map.dispose();
+            if (mm.dispose) mm.dispose();
+          }
+        });
+        if (o.children) o.children.slice().forEach(scrub);
+      })(self.cubeGroup);
+      geos.forEach(function(g){ if (g && g.dispose) g.dispose(); });
+    }
+    if (origBuildCube) inst.buildCube = function(n){
+      try { disposeCube(this); } catch(e){}
+      return origBuildCube(n);
+    };
+    if (origFinalizeMove) inst.finalizeMove = function(){
+      var am = this.activeMove, slab = am && am.slab;
+      origFinalizeMove();
+      if (slab){ try {
+        if (slab.geometry && slab.geometry.dispose) slab.geometry.dispose();
+        var sm = slab.material;
+        if (sm) (Array.isArray(sm) ? sm : [sm]).forEach(function(mm){ if (mm && mm.dispose) mm.dispose(); });
+      } catch(e){} }
+    };
+
+    function secureBelow(limit){
+      if (limit <= 1) return 0;
+      if (globalThis.crypto && globalThis.crypto.getRandomValues){
+        var buf = new Uint32Array(1);
+        var ceiling = 0x100000000 - (0x100000000 % limit);
+        do { globalThis.crypto.getRandomValues(buf); } while (buf[0] >= ceiling);
+        return buf[0] % limit;
+      }
+      return Math.floor(Math.random() * limit); // legacy webview fallback
+    }
+
+    function formatFaceTurn(face, width, amount){
+      var head = width <= 1 ? face : (width === 2 ? face+'w' : String(width)+face+'w');
+      return head + (amount === 2 ? '2' : amount < 0 ? "'" : '');
+    }
+    function makeFaceTurn(face, width, amount, n){
+      face=String(face||'').toUpperCase();
+      var spec={R:[0,true,1],L:[0,false,-1],U:[1,true,1],D:[1,false,-1],F:[2,true,1],B:[2,false,-1]}[face];
+      if (!spec) throw new Error('Use only the faces U, D, L, R, F, and B.');
+      var maxWidth = n >= 4 ? Math.floor(n/2) : 1;
+      width=Math.round(Number(width)||1);
+      if (width < 1 || width > maxWidth){
+        throw new Error(n < 4 ? 'Wide turns are available on 4×4 and larger cubes.' : 'Turn width must be between 1 and '+maxWidth+' for '+n+'×'+n+'.');
+      }
+      amount=Number(amount);
+      if (amount !== 1 && amount !== -1 && amount !== 2) throw new Error('Turn amount must be 90°, −90°, or 180°.');
+      var axis=spec[0], positive=spec[1], baseDir=spec[2];
+      var start=positive ? n-width : 0, end=positive ? n-1 : width-1;
+      var dir=amount === 2 ? baseDir : baseDir*amount;
+      var repeats=amount === 2 ? 2 : 1, moves=[];
+      for (var r=0;r<repeats;r++) for (var layer=start;layer<=end;layer++) moves.push({axis:axis,layer:layer,dir:dir});
+      return { notation:formatFaceTurn(face,width,amount), face:face, width:width, amount:amount, moves:moves };
+    }
+    function parseCustomAlgorithm(text, n){
+      text=String(text||'').replace(/[’‘]/g,"'").replace(/,/g,' ').trim();
+      if (!text) throw new Error('Enter at least one move, for example R U R\' U\'.');
+      var tokens=text.split(/\s+/).filter(Boolean);
+      var maxTokens=n===2 ? 9 : 100;
+      if (tokens.length > maxTokens) throw new Error(n===2 ? '2×2 custom scrambles are limited to 9 moves so the exact solver can always search deeply enough.' : 'Custom scrambles are limited to 100 moves.');
+      var groups=[];
+      tokens.forEach(function(token,index){
+        var match=/^(\d+)?([UDLRFBudlrfb])([wW]?)(2'?|'|)?$/.exec(token);
+        if (!match) throw new Error('Move '+(index+1)+' ("'+token+'") is not valid. Try R, R\', R2, Rw, or 3Rw2.');
+        var rawFace=match[2], wideMark=!!match[3], prefix=match[1] ? Number(match[1]) : 0;
+        var lower=rawFace === rawFace.toLowerCase();
+        var width=prefix || ((wideMark||lower) ? 2 : 1);
+        var suffix=match[4]||'';
+        var amount=suffix.indexOf('2')>=0 ? 2 : suffix.indexOf("'")>=0 ? -1 : 1;
+        groups.push(makeFaceTurn(rawFace.toUpperCase(),width,amount,n));
+      });
+      return { groups:groups, moves:groups.reduce(function(all,g){ return all.concat(g.moves); },[]) };
+    }
+    function clearScrambleHistory(self, clearInput){
+      self.lastScramble=[]; self.lastSolution=[]; self._manualGroups=[]; self._customBaseNotation='';
+      self.scrambleMoveCount=0; self.realNotation=null; self.realMoveCount=null;
+      self.realWinner=null; self.realLanes=[]; self.hasSolution=false; self._lastSolveTelemetry=null;
+      if (clearInput){ var input=self.root&&self.root.querySelector('[data-alg-input]'); if(input)input.value=''; setCustomError(self,''); }
+    }
+    function rebuildFromScrambleHistory(self){
+      if (!self.lab||!self.buildCube) return false;
+      self.buildCube(self.n); self.lab.set_size(self.n); self.lab.reset();
+      (self.lastScramble||[]).forEach(function(m){ self.applyInstant(m); self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+      self.scrambled=!self.lab.is_solved();
+      return self.scrambled;
+    }
+
+    inst.scramble = function(){
+      if (this.busy) return;
+      if (this.mode !== 'cubie') return origScramble();   // huge (texture) cubes: design path
+      this.resetSolved(true);
+      clearScrambleHistory(this,true);
+      const N = this.n;
+      // 2×2/3×3 use outer turns. Supported 4×4+ cubes use standard contiguous
+      // wide turns from either face, mixing inner layers while staying inside the
+      // replay corpus exercised by the deterministic reduction solver.
+      const solvable = (N <= SOLVE_MAX_N) && !!this.lab;
+      // Keep generated reduction scrambles within the tested 20 turns per layer.
+      const depth = solvable
+        ? Math.min(this.scrambleDepth, scrambleDepthLimit(N))
+        : this.scrambleDepth;
+      this.lastScramble = [];
+      let prev = -1;
+      for (let i=0;i<depth;i++){
+        // Adjacent turns never share an axis, avoiding trivial cancellations and
+        // making every generated challenge a stronger, independently random state.
+        let axis = prev < 0 ? secureBelow(3) : secureBelow(2);
+        if (prev >= 0 && axis >= prev) axis++;
+        prev = axis;
+        const dir = secureBelow(2) ? 1 : -1;
+        if (solvable && N >= 4){
+          const width = 1 + secureBelow(Math.max(1, Math.floor(N/2)));
+          const start = secureBelow(2) ? N-width : 0;
+          for (let layer=start; layer<start+width; layer++) this.lastScramble.push({axis, layer, dir});
+        } else {
+          const layer = (N <= 3) ? (secureBelow(2) ? N-1 : 0) : secureBelow(N);
+          this.lastScramble.push({axis, layer, dir});
+        }
+      }
+      this.scrambleMoveCount = depth;
+      // Apply the whole scramble instantly — fast at any depth, no stuck queue.
+      for (const m of this.lastScramble) this.applyInstant(m);
+      // Mirror into the solver's cube only when it can actually solve it (N<=SOLVE_MAX_N).
+      if (solvable){ this.lab.reset(); for (const m of this.lastScramble) this.lab.apply_design_move(m.axis, m.layer, m.dir); }
+      this.queue = []; this.activeMove = null;
+      this.movesDone = depth; this.totalMoves = depth; this.solveProgress = 0;
+      this.phase = 'idle'; this.busy = false; this.scrambled = true; this.hasSolution = false;
+      if (this.setSolvedPct) this.setSolvedPct(0);
+      if (this.resetLanes) this.resetLanes();
+      if (this.ui && this.ui.status) this.ui.status.textContent = 'Scrambled — ready to solve';
+      if (this.ui && this.ui.count) this.ui.count.style.display = 'none';
+      if (this.ui && this.ui.move) this.ui.move.style.display = 'none';
+      if (this.syncControls) this.syncControls();
+      if (this._refreshCustomScramble) this._refreshCustomScramble(this);
+    };
+
+    // A user can click Swarm during the brief async WASM boot window, when the
+    // authored scramble method is still installed. Reconstruct that exact target
+    // state in CubeLab before any post-wire solve reads sticker colours.
+    function syncLabFromVisibleScramble(self){
+      if (!self.lab) return;
+      self.lab.set_size(self.n);
+      self.lab.reset();
+      if (self.scrambled) (self.lastScramble||[]).forEach(function(m){ self.lab.apply_design_move(m.axis, m.layer, m.dir); });
+    }
+    syncLabFromVisibleScramble(inst);
+
+    inst.finishLanes = function(){
+      const winnerKey = KEYS[this.realWinner] || 'det';
+      // Use the face-turn (HTM) count, not the half-turn-expanded animation list
+      // length, so the lane agrees with the proof box and the README.
+      var moves = (this.realMoveCount != null) ? this.realMoveCount : (this.lastSolution||[]).length;
+      lanesUpdate(this, this.realLanes || [], winnerKey, moves);
+    };
+
+    // The solution panel must show the standard face-turn notation (e.g. "U2",
+    // "R'"), not the half-turn-expanded animation list ("U U", "R'"). The solver
+    // returns that as res.notation; render the panel and clipboard from it so the
+    // count and moves match the lane, the proof box and the README.
+    var origShowSolution = inst.showSolution ? inst.showSolution.bind(inst) : null;
+    if (origShowSolution) inst.showSolution = function(){
+      if (this.mode !== 'texture' && this.realNotation && this.realNotation.length && this.ui && this.ui.solCount && this.ui.solChips){
+        this.ui.solCount.textContent = this.realNotation.length;
+        this.ui.solChips.innerHTML = '';
+        this.realNotation.forEach((function(txt){
+          var s = document.createElement('span');
+          s.textContent = txt;
+          s.style.cssText = "font-family:'JetBrains Mono',monospace;font-size:11.5px;padding:3px 7px;background:#F4F3EF;border-radius:6px;color:#3a3933;";
+          this.ui.solChips.appendChild(s);
+        }).bind(this));
+        return;
+      }
+      return origShowSolution();
+    };
+    var origCopyPath = inst.copyPath ? inst.copyPath.bind(inst) : null;
+    if (origCopyPath) inst.copyPath = function(){
+      if (this.realNotation && this.realNotation.length){
+        var txt = this.realNotation.join(' ');
+        try { if (navigator.clipboard) navigator.clipboard.writeText(txt); } catch (e) {}
+        var btn = this.q && this.q('[data-copy]');
+        if (btn){ var o = btn.innerHTML; btn.innerHTML = '<span style="font-size:12px;color:#1BA64B;">Copied ✓</span>'; setTimeout(function(){ btn.innerHTML = o; }, 1400); }
+        return;
+      }
+      return origCopyPath();
+    };
+
+    function nativeCore(){
+      return globalThis.__TAURI__ && globalThis.__TAURI__.core && globalThis.__TAURI__.core.invoke
+        ? globalThis.__TAURI__.core : null;
+    }
+    function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= 11; }
+    function solveRequestToken(){
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') return globalThis.crypto.randomUUID();
+      var parts=[]; for(var i=0;i<4;i++) parts.push(secureBelow(0x100000000).toString(16).padStart(8,'0'));
+      return Date.now().toString(16)+'-'+parts.join('');
+    }
+    function elapsedLabel(ms){
+      var seconds = Math.max(0, Math.floor(ms / 1000));
+      return seconds < 60 ? (seconds + 's') : (Math.floor(seconds/60) + 'm ' + (seconds%60) + 's');
+    }
+    function refreshSolveActivity(self){
+      if (!self._solvePending) return;
+      var elapsed = performance.now() - (self._solveStartedAt || performance.now());
+      self._solveElapsedMs = elapsed;
+      var engine = self._solveDispatch === 'native' ? 'Native RCube engine' :
+                   self._solveDispatch === 'worker' ? 'WASM solver' : 'Solver';
+      var statusKey = engine+':'+self.n;
+      if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
+        self._solveStatusKey = statusKey;
+        self.ui.status.textContent = engine + ' active on ' + self.n + '×' + self.n + ' · Cancel available';
+      }
+      var badge = self.root.querySelector('[data-solve-elapsed]');
+      if (!badge && self.ui && self.ui.status){
+        badge=document.createElement('span'); badge.setAttribute('data-solve-elapsed',''); badge.setAttribute('aria-hidden','true');
+        badge.style.cssText='margin-left:7px;font:600 10.5px/1.2 ui-monospace,SFMono-Regular,monospace;color:#1573E6;background:#EAF3FF;border-radius:999px;padding:3px 7px;';
+        self.ui.status.insertAdjacentElement('afterend', badge);
+      }
+      if (badge){ badge.style.display='inline-block'; badge.textContent=elapsedLabel(elapsed); }
+      var travel = self.reducedMotion ? 0 : ((Math.floor(elapsed/500)%4) * 80);
+      var lane = self.root.querySelector('[data-lane="det"]');
+      if (lane){
+        lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
+        var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
+        if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
+        if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
+        if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
+      }
+      var progress=self.root.querySelector('[data-progress]');
+      if (progress){
+        if (progress.parentElement) progress.parentElement.style.overflow='hidden';
+        progress.removeAttribute('aria-valuenow'); progress.setAttribute('aria-valuetext','Solver active');
+        progress.style.width='28%'; progress.style.transform='translateX('+travel+'%)'; progress.style.transition='transform .5s linear';
+      }
+    }
+    function startSolveActivity(self){
+      self._solveStartedAt = performance.now();
+      clearInterval(self._solveHeartbeat);
+      refreshSolveActivity(self);
+      self._solveHeartbeat = setInterval(function(){ refreshSolveActivity(self); }, 500);
+    }
+    function stopSolveActivity(self){
+      clearInterval(self._solveHeartbeat);
+      self._solveHeartbeat = null;
+      self._solveElapsedMs = self._solveStartedAt ? performance.now() - self._solveStartedAt : 0;
+      self._solveStatusKey = null;
+      var badge=self.root.querySelector('[data-solve-elapsed]'); if (badge) badge.style.display='none';
+      var lane=self.root.querySelector('[data-lane="det"]');
+      if (lane){ lane.removeAttribute('aria-valuetext'); var fill=lane.querySelector('[data-fill]'); if(fill){ fill.style.opacity='1'; fill.style.transform='none'; } }
+      var progress=self.root.querySelector('[data-progress]');
+      if (progress){ progress.removeAttribute('aria-valuetext'); progress.style.transform='none'; progress.style.transition='width .12s linear'; progress.style.width='0%'; progress.setAttribute('aria-valuenow','0'); }
+    }
+    function postNativeSolve(self){
+      var core = nativeCore();
+      if (!core || !self._solvePending || self._solveDispatch) return false;
+      self._solveDispatch = 'native';
+      showCancel(self, true);
+      startSolveActivity(self);
+      var jobId = self._solveJobId, requestToken = self._solveRequestToken;
+      var colors = Array.from(self.lab.face_colors(self.n));
+      core.invoke('solve_stickers', { requestToken:requestToken, n:self.n, colors:colors }).then(function(result){
+        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:result });
+      }).catch(function(error){
+        onSolveResult(self, { type:'result', jobId:jobId, ok:false, error:String(error) });
+      });
+      return true;
+    }
+
+    inst.solve = function(){
+      if (this.busy || this._solvePending) return;
+      // Fail closed if state is ever forced outside the active platform's verified
+      // range. The product no longer offers an inverse-playback "visual solve".
+      if (this.mode !== 'cubie' || this.n > SOLVE_MAX_N || !this.lab){
+        if (this.ui && this.ui.status) this.ui.status.textContent = 'This cube size is not supported by the verified solver';
+        return;
+      }
+      // Solve must always do something. On a fresh / already-solved cube
+      // (scrambled=false) it used to silently no-op; scramble first, then solve.
+      if (!this.scrambled){ if (this.scramble) this.scramble(); if (!this.scrambled) return; }
+      // Clear the previous solve's data; the verified result repopulates it.
+      this.realNotation = null; this.realMoveCount = null;
+      // Real solve for every supported size. _solvePending (not busy) blocks
+      // re-entry without letting the animation loop finish an empty queue.
+      this._solvePending = true;
+      this._solveDispatch = null;
+      this._solveJobId = (this._solveJobId || 0) + 1;
+      this._solveRequestToken = solveRequestToken();
+      var solveJobId = this._solveJobId;
+      // Reduction grows quickly with N. Keep a watchdog, but size it from measured
+      // release behavior so a valid 9×9–11×11 solve is not killed at eight seconds.
+      var _sw = this;
+      var watchdogMs = this.n <= 3 ? 8000 : this.n <= 5 ? 30000 : this.n <= 8 ? 120000 : 300000;
+      clearTimeout(this._solveWatchdog);
+      this._solveWatchdog = setTimeout(function(){
+        if (!_sw._solvePending || _sw._solveJobId !== solveJobId) return;
+        abortPendingSolve(_sw);
+        _sw._lastSolveTelemetry = { n:_sw.n, elapsedMs:_sw._solveElapsedMs||watchdogMs, verified:false, error:'Solve timed out' };
+        if (_sw.ui && _sw.ui.status) _sw.ui.status.textContent = 'Solve timed out — try a smaller cube or shallower scramble';
+        if (_sw.syncControls) _sw.syncControls();
+      }, watchdogMs);
+      if (this.ui && this.ui.status) this.ui.status.textContent = 'Starting solver…';
+      if (this.startLanes) this.startLanes();
+      if (this.syncControls) this.syncControls();
+      if (hasNativeReduction(this)){
+        postNativeSolve(this);
+      } else {
+        var worker = ensureWorker(this);
+        if (this._workerReady && worker){
+          postWorkerSolve(this);
+        } else if (!worker) {
+          handleWorkerFailure(this);
+        } else {
+          showCancel(this, true);
+          if (this.ui && this.ui.status) this.ui.status.textContent = 'Loading solver worker…';
+          clearTimeout(this._workerLoadTimer);
+          this._workerLoadTimer = setTimeout(function(){
+            if (!_sw._solvePending || _sw._workerReady) return;
+            if (_sw.n <= 3) runSmallFallback(_sw);
+            else handleWorkerFailure(_sw);
+          }, 1500);
+        }
+      }
+    };
+
+    // ---- Web Worker solve plumbing (responsive + cancellable) ----
+    function postWorkerSolve(self){
+      if (!self._solvePending || self._solveDispatch || !self._workerReady || !self._worker) return;
+      self._solveDispatch = 'worker';
+      clearTimeout(self._workerLoadTimer);
+      showCancel(self, true);
+      startSolveActivity(self);
+      // Send only the visible sticker state. The worker never receives the
+      // scramble sequence, so its verified path cannot be a hidden inverse.
+      var colors = self.lab.face_colors(self.n);
+      self._worker.postMessage({ type:'solve', jobId:self._solveJobId, n:self.n, depth:self.scrambleDepth||6, time:6000, colors:colors });
+    }
+
+    function runSmallFallback(self){
+      if (!self._solvePending || self._solveDispatch) return;
+      self._solveDispatch = 'fallback';
+      clearTimeout(self._workerLoadTimer);
+      startSolveActivity(self);
+      var jobId = self._solveJobId;
+      self._fallbackTimer = setTimeout(function(){
+        self._fallbackTimer = null;
+        if (!self._solvePending || self._solveJobId !== jobId) return;
+        var r; try { r = self.lab.solve(Math.min(self.scrambleDepth||6, 9), 1500); } catch(e){ r = '{"found":false}'; }
+        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:r });
+      }, 0);
+    }
+
+    function handleWorkerFailure(self){
+      clearTimeout(self._workerLoadTimer);
+      self._workerReady = false;
+      self._workerBroken = true;
+      if (self._worker){ try { self._worker.terminate(); } catch(e){} }
+      self._worker = null;
+      if (!self._solvePending) return;
+      self._solveDispatch = null;
+      if (self.n <= 3){ runSmallFallback(self); return; }
+      clearTimeout(self._solveWatchdog);
+      stopSolveActivity(self);
+      self._lastSolveTelemetry = { n:self.n, elapsedMs:self._solveElapsedMs||0, verified:false, error:'Solver worker unavailable' };
+      self._solvePending = false;
+      self._solveRequestToken = null;
+      self._solveDispatch = null;
+      showCancel(self, false);
+      if (self.ui && self.ui.status) self.ui.status.textContent = 'Solver worker unavailable — reduction was not run on the UI thread';
+      if (self.syncControls) self.syncControls();
+    }
+
+    function ensureWorker(self){
+      if (self._workerBroken) return null;
+      if (self._worker) return self._worker;
+      try {
+        var w = new Worker('./solver-worker.js', { type:'module' });
+        w.onmessage = function(e){
+          if (self._worker !== w) return;
+          var d = e.data || {};
+          if (d.type === 'ready'){
+            self._workerReady = true;
+            postWorkerSolve(self);
+            return;
+          }
+          if (d.type === 'error'){ handleWorkerFailure(self); return; }
+          if (d.type === 'result'){ onSolveResult(self, d); }
+        };
+        w.onerror = function(){ if (self._worker === w) handleWorkerFailure(self); };
+        self._worker = w;
+      } catch(e){
+        self._worker = null;
+        handleWorkerFailure(self);
+      }
+      return self._worker;
+    }
+    // Stop an in-flight worker solve or a not-yet-started fallback. Returns true
+    // when an operation was pending; a synchronous fallback already executing
+    // cannot receive events until it returns, but duplicate dispatch is prevented.
+    function abortPendingSolve(self){
+      if (!self._solvePending) return false;
+      var dispatch = self._solveDispatch, requestToken = self._solveRequestToken;
+      clearTimeout(self._solveWatchdog);
+      clearTimeout(self._workerLoadTimer);
+      clearTimeout(self._fallbackTimer);
+      stopSolveActivity(self);
+      if (dispatch === 'native' && nativeCore()){
+        nativeCore().invoke('cancel_solve', { requestToken:requestToken }).catch(function(){});
+      }
+      self._solvePending = false;
+      self._solveRequestToken = null;
+      self._solveDispatch = null;
+      self._solveJobId = (self._solveJobId || 0) + 1;
+      var terminatedWorker = false;
+      if (dispatch !== 'native' && self._worker){
+        try { self._worker.terminate(); } catch(e){}
+        self._worker = null; self._workerReady = false; terminatedWorker = true;
+      }
+      showCancel(self, false);
+      if (terminatedWorker) ensureWorker(self);
+      return true;
+    }
+    function onSolveResult(self, data){
+      if (!self._solvePending || !data || data.jobId !== self._solveJobId) return;
+      clearTimeout(self._solveWatchdog);
+      clearTimeout(self._workerLoadTimer);
+      clearTimeout(self._fallbackTimer);
+      stopSolveActivity(self);
+      var elapsedMs = self._solveElapsedMs || 0;
+      self._solvePending = false;
+      self._solveRequestToken = null;
+      self._solveDispatch = null;
+      showCancel(self, false);
+      var res = null;
+      if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
+      if (!res || !res.found || !res.moves || !res.moves.length){
+        self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
+        if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
+          ? ('Solver stopped: ' + data.error)
+          : 'No verified solution within budget — lower the scramble depth';
+        lanesUpdate(self, (res && res.lanes) || [], null, 0);
+        if (self.syncControls) self.syncControls();
+        return;
+      }
+      // Keep the authoritative Rust-side state synchronized with the visible
+      // replay target. Controls remain locked while the mesh catches up.
+      var targetVerified=false;
+      try {
+        res.moves.forEach(function(m){ self.lab.apply_design_move(m.axis,m.layer,m.dir); });
+        targetVerified=self.lab.is_solved();
+      } catch(e){}
+      if (!targetVerified){
+        rebuildFromScrambleHistory(self);
+        self._lastSolveTelemetry={n:self.n,elapsedMs:elapsedMs,verified:false,error:'Returned path did not match the active cube state'};
+        if(self.ui&&self.ui.status)self.ui.status.textContent='Solver result rejected — active state mismatch';
+        if(self.syncControls)self.syncControls();
+        return;
+      }
+      self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:true, moveCount:res.moveCount, winner:res.winner };
+      self.realWinner = res.winner; self.realLanes = res.lanes || [];
+      self.lastSolution = res.moves;
+      // res.moveCount is the face-turn (HTM) count; res.moves is the half-turn-
+      // expanded animation list. Keep the HTM count + notation for the lane/proof/
+      // solution panel so all three agree (the panel must show U2, not "U U").
+      self.realMoveCount = res.moveCount;
+      self.realNotation = res.notation || null;
+      updateProof(self, self.scrambleMoveCount || (self.lastScramble||[]).length, res.moveCount);
+      self.queue = res.moves.slice();   // fill the queue BEFORE claiming busy
+      self.movesDone = 0; self.totalMoves = self.queue.length;
+      self.phase = 'solving'; self.busy = true;
+      if (self.ui && self.ui.status) self.ui.status.textContent = 'Verified in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
+      if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
+      if (self.syncControls) self.syncControls();
+    }
+    // Stop an in-flight solution *replay* (the visible, multi-second animation) and
+    // put the cube back to its scrambled state so a cancel cleanly returns to
+    // "ready to solve". This is what the user is actually watching when they hit
+    // Cancel — the search itself finishes in ~100ms.
+    function stopReplay(self){
+      var animating = (self.busy && self.phase === 'solving') || (self.queue && self.queue.length);
+      if (!animating) return false;
+      if (self.activeMove && self.finalizeMove){ try { self.finalizeMove(); } catch(e){} }
+      self.activeMove = null;
+      self.queue = []; self.movesDone = 0; self.totalMoves = 0;
+      self.phase = 'idle'; self.busy = false;
+      // Rebuild both representations from the same history; a half-played
+      // solution must never leave the mesh and Rust cube on different states.
+      try { rebuildFromScrambleHistory(self); } catch(e){}
+      self.hasSolution=false;
+      if (self.ui && self.ui.move) self.ui.move.style.display = 'none';
+      if (self.ui && self.ui.count) self.ui.count.style.display = 'none';
+      return true;
+    }
+    function cancelSolve(self){
+      var hadSearch = abortPendingSolve(self);   // stop an off-thread search, if any
+      var hadReplay = stopReplay(self);          // stop the visible replay, if any
+      if (!hadSearch && !hadReplay) return;      // nothing to cancel
+      if (hadSearch) self._lastSolveTelemetry = { n:self.n, elapsedMs:self._solveElapsedMs||0, verified:false, error:'Solve cancelled' };
+      if (self.resetLanes) self.resetLanes();
+      if (self.ui && self.ui.status) self.ui.status.textContent = 'Solve cancelled — scramble or solve again';
+      if (self.syncControls) self.syncControls();
+    }
+    // Solve is disabled for the whole solve (search + replay). Cancel is only
+    // exposed while there is an operation it can actually stop.
+    function updateSolveButtons(self){
+      var solving = !!self._solvePending || (self.busy && self.phase === 'solving');
+      var solveBtn = self.root.querySelector('[data-onclick="onSolve"]');
+      // Solve is greyed ONLY while a solve is in progress. Otherwise it stays
+      // clickable even on a solved/fresh cube (it scrambles first), so it never
+      // silently does nothing. This overrides the design's 'grey when unscrambled'.
+      if (solveBtn){
+        solveBtn.disabled = solving;
+        solveBtn.setAttribute('aria-disabled', String(solving));
+        solveBtn.style.opacity = solving ? '0.45' : '1';
+        solveBtn.style.pointerEvents = solving ? 'none' : 'auto';
+        solveBtn.style.cursor = solving ? 'default' : 'pointer';
+      }
+      var cb = self.root.querySelector('[data-cancel-solve]');
+      if (cb){
+        cb.disabled = !solving;
+        cb.setAttribute('aria-disabled', String(!solving));
+        cb.style.display = solving ? 'block' : 'none';
+        cb.style.opacity = solving ? '1' : '0';
+        cb.style.pointerEvents = solving ? 'auto' : 'none';
+        cb.style.cursor = solving ? 'pointer' : 'default';
+      }
+    }
+    // Kept for existing call sites — state is derived from _solvePending/busy.
+    function showCancel(self){ updateSolveButtons(self); }
+    // Re-sync the Solve/Cancel buttons on every UI state change the design makes.
+    if (inst.syncControls){
+      var origSyncC = inst.syncControls.bind(inst);
+      inst.syncControls = function(){ origSyncC(); updateSolveButtons(this); };
+    }
+    var origUnmount = inst.componentWillUnmount ? inst.componentWillUnmount.bind(inst) : null;
+    inst.componentWillUnmount = function(){
+      clearTimeout(this._solveWatchdog);
+      clearTimeout(this._workerLoadTimer);
+      clearTimeout(this._fallbackTimer);
+      clearTimeout(this._swarmAutoStartTimer);
+      clearInterval(this._solveHeartbeat);
+      if (this._solvePending && this._solveDispatch === 'native' && nativeCore()){
+        nativeCore().invoke('cancel_solve', { requestToken:this._solveRequestToken }).catch(function(){});
+      }
+      if (this._worker){ try { this._worker.terminate(); } catch(e){} this._worker=null; }
+      if (origUnmount) origUnmount();
+    };
+    ensureWorker(inst);   // warm up the solver worker so it's ready before the first solve
+    updateSolveButtons(inst);   // initial state: Solve enabled, Cancel hidden
+
+    // Don't animate fabricated telemetry for dedicated solver paths.
+    var origUpdateLanes = inst.updateLanes ? inst.updateLanes.bind(inst) : null;
+    if (origUpdateLanes) inst.updateLanes = function(f){
+      // The 3×3 two-phase solve finishes before the replay even starts, so don't
+      // fabricate per-frame beam-search node/generation telemetry on its lane —
+      // that would contradict the "two-phase" label. Show it as found; finishLanes
+      // then stamps the verified move count.
+      if ((this.n||3) === 3){
+        var el = this.root.querySelector('[data-lane="det"]');
+        if (el){
+          var stat = el.querySelector('[data-stat]'), fill = el.querySelector('[data-fill]'), pct = el.querySelector('[data-pct2]');
+          if (stat) stat.textContent = 'solution found — replaying';
+          if (fill) fill.style.width = '100%';
+          if (pct) pct.textContent = '100%';
+        }
+        return;
+      }
+      return origUpdateLanes(f);
+    };
+
+    // ---- real evolutionary swarm: each card is a live learning trial ----
+    var SWPAL = [inst.PAL.w, inst.PAL.y, inst.PAL.g, inst.PAL.b, inst.PAL.o, inst.PAL.r];
+    var FACE_FOR_CARD = [0,2,5,3,4,1]; // card faces [U,F,R,B,L,D] -> wasm [Up,Down,Front,Back,Left,Right]
+    var origInitSwarm = inst.initSwarm ? inst.initSwarm.bind(inst) : null;
+    var origUpdateSwarm = inst.updateSwarm ? inst.updateSwarm.bind(inst) : null;
+
+    function swarmKey(self){ return (self.n||3)+':'+JSON.stringify(self.lastScramble||[]); }
+    var SWARM_MAX = 3;   // search/evolution only genuinely solves 2×2 / 3×3
+    function makeSwarm(self){
+      try {
+        if ((self.n||3) > SWARM_MAX){ self.swarmLab = null; self._swarmKey = swarmKey(self); return; }
+        var cnt = (self.cards||[]).length||16;
+        var ls = self.lastScramble || [];
+        self.swarmLab = new Swarm(cnt, self.n||3, Math.max(3, self.scrambleDepth||6), BigInt(secureBelow(0x100000000))+1n);
+        // Always seed the swarm from the EXACT Studio cube. Empty scramble (a
+        // solved Studio) → solved base, so the wall mirrors the on-screen cube.
+        self.swarmLab.set_scramble(
+          Uint8Array.from(ls.map(function(m){return m.axis;})),
+          Uint32Array.from(ls.map(function(m){return m.layer;})),
+          Int32Array.from(ls.map(function(m){return m.dir;})));
+        self.swarmShared = ls.length > 0;
+        self._swarmKey = swarmKey(self);
+        self._swAccum=0; self._swPainted=false;
+      } catch(e){ console.warn('swarm init failed', e); self.swarmLab=null; }
+    }
+
+    if (origInitSwarm) inst.initSwarm = function(){
+      origInitSwarm();
+      this.cumulativeSolves = 0;
+      makeSwarm(this);
+    };
+
+    if (origUpdateSwarm) inst.updateSwarm = function(dt){
+      if (!this.cards || !this.cards.length) return;
+      var grid = this.root.querySelector('[data-swarm]');
+      var msg = this.root.querySelector('[data-swarm-msg]');
+      var liveEl = this.root.querySelector('[data-swarm-live]');
+      var note = this.root.querySelector('[data-swarm-note]');
+      // Remember the grid's real display value so we can restore it (don't blank it).
+      if (grid && this._gridDisp === undefined) this._gridDisp = grid.style.display || 'grid';
+      // Truthful dual mode: evolutionary population cards for 2×2/3×3; live
+      // reduction telemetry for 4×4–11×11. Never imply the GA solves big cubes.
+      if ((this.n||3) > SWARM_MAX){
+        this.swarmLab = null;
+        if (grid) grid.style.display = 'none';
+        var n = this.n||3, telem = this._lastSolveTelemetry;
+        var replaying = !!(this.busy && this.phase === 'solving' && telem && telem.n === n && telem.verified);
+        if (n > SOLVE_MAX_N){
+          if (note) note.innerHTML = '<b>Unsupported cube size.</b> Return to Studio and choose a size inside this platform’s replay-verified range.';
+          if (liveEl) liveEl.textContent = 'No solver is available for this size';
+        } else {
+          if (note) note.innerHTML = 'For 4×4–11×11 this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop uses RCube; browser builds use Rust reduction. Both report elapsed activity and replay proof without inventing search progress.';
+          if (liveEl && liveEl.textContent !== 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3') liveEl.textContent = 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3';
+        }
+        if (msg){
+          msg.style.display = 'block';
+          var stateKey = n > SOLVE_MAX_N ? ('unsupported:'+n+':'+SOLVE_MAX_N) :
+            this._solvePending ? ('active:'+n+':'+this._solveDispatch) :
+            replaying ? ('replay:'+n+':'+telem.moveCount) :
+            telem && telem.n === n && telem.verified ? ('verified:'+n+':'+telem.moveCount+':'+Math.round(telem.elapsedMs)) :
+            telem && telem.n === n ? ('failed:'+n+':'+String(telem.error)) : ('ready:'+n);
+          if (msg._telemetryState !== stateKey){
+            msg._telemetryState = stateKey;
+            var nativeRcube = !!nativeCore() && n >= 4 && n <= SOLVE_MAX_N;
+            var pipelineSteps = nativeRcube
+              ? ['sticker state','RCube centers','corners','edges','Rust replay']
+              : ['sticker state','centers','edge wings','reduced 3×3','independent replay'];
+            var pipeline = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 10px;">' +
+              pipelineSteps.map(function(s){ return '<span style="padding:5px 8px;border:1px solid #D9E2D5;border-radius:999px;background:#fff;font-size:11px;color:#5E6C59;">'+s+'</span>'; }).join('<span style="color:#A9B3A5;padding:5px 0;">→</span>') + '</div>';
+            if (n > SOLVE_MAX_N){
+              msg.innerHTML = '<b>'+n+'×'+n+' is not supported.</b><div style="margin-top:7px;">This build intentionally offers only sizes with a replay-verified solver.</div>';
+            } else if (this._solvePending){
+              msg.innerHTML = '<div style="display:flex;align-items:center;gap:9px;color:#1573E6;"><span style="width:10px;height:10px;border-radius:50%;background:#1573E6;box-shadow:0 0 0 5px rgba(21,115,230,.12);"></span><b>'+
+                (this._solveDispatch === 'native' ? 'Native reduction is active (RCube engine)' : 'WASM solver is active') +
+                '</b></div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:12px;">'+n+'×'+n+' · <span data-reduction-elapsed aria-hidden="true">0s</span></div>' + pipeline +
+                '<div style="font-size:12px;color:#6F756A;">Working from '+(6*n*n).toLocaleString()+' visible sticker colours. Progress percentages are intentionally omitted because solve stages have data-dependent costs.</div>'+
+                '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel solve</button>';
+            } else if (replaying){
+              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ Verified solution is replaying</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
+                '<div data-replay-moves style="font-size:12px;color:#6F756A;">0 / '+this.totalMoves+' animation steps</div>'+
+                '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel playback</button>';
+            } else if (telem && telem.n === n && telem.verified){
+              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ Replay-verified solver result</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
+                '<div style="font-size:12px;color:#6F756A;">The returned legal moves were independently replayed to solved before animation began.</div>';
+            } else if (telem && telem.n === n && !telem.verified){
+              msg.innerHTML = '<div style="color:#A35A24;font-weight:650;">Solver stopped without a verified path</div><div style="margin-top:8px;font-size:12px;color:#6F756A;">See the Studio status for details, then retry or choose a smaller cube.</div>' + pipeline;
+            } else {
+              msg.innerHTML = '<b>'+n+'×'+n+' uses a dedicated large-cube solver, not evolutionary search.</b><div style="margin-top:7px;">Start it here to watch live elapsed activity, its real solving stages, and replay-verified results.</div>' + pipeline +
+                '<button type="button" data-reduction-start style="margin-top:8px;padding:10px 14px;border:0;border-radius:10px;background:#161514;color:#fff;font-weight:600;cursor:pointer;">Start solve</button>';
+            }
+          }
+          var timer=msg.querySelector('[data-reduction-elapsed]');
+          if (timer) timer.textContent=elapsedLabel(this._solveElapsedMs||0);
+          var replay=msg.querySelector('[data-replay-moves]');
+          if (replay) replay.textContent=(this.movesDone||0).toLocaleString()+' / '+(this.totalMoves||0).toLocaleString()+' animation steps';
+          var start=msg.querySelector('[data-reduction-start]');
+          if (start && !start._wired){ start._wired=true; var self=this; start.addEventListener('click', function(){ if (!self._solvePending && !self.busy) self.solve(); }); }
+          var cancel=msg.querySelector('[data-reduction-cancel]');
+          if (cancel && !cancel._wired){ cancel._wired=true; var self2=this; cancel.addEventListener('click', function(){ cancelSolve(self2); }); }
+        }
+        return;
+      }
+      if (grid) grid.style.display = this._gridDisp;
+      if (msg) msg.style.display = 'none';
+      if (note) note.innerHTML = 'Each cell is one <b>trial of the evolutionary solver</b>, and every trial starts as an exact copy of <b>your Studio cube</b>. They mutate and recombine until a trial reaches solved (it turns green, then restarts from the cube). Change the Studio scramble and the whole wall instantly re-syncs to it. The trials see only the cube state, never the scramble.';
+      // Always track the Studio cube: rebuild whenever its scramble (or N) changes.
+      if (!this.swarmLab) makeSwarm(this);
+      else if (this._swarmKey !== swarmKey(this)) makeSwarm(this);
+      if (liveEl){
+        liveEl.textContent = this.swarmShared
+          ? ('Tracking your Studio cube — ' + this.n + '×' + this.n + ', ' + (this.lastScramble||[]).length + '-move scramble')
+          : 'Studio cube is solved — scramble it to watch the swarm learn to solve it';
+      }
+      if (!this.swarmLab) return origUpdateSwarm(dt);
+      try {
+        var g = this.swarmSpeed || 1;
+        this._swAccum = (this._swAccum||0) + dt * g * 100;
+        var steps=0; while (this._swAccum >= 1 && steps < 24){ this.swarmLab.step(); this._swAccum -= 1; steps++; }
+        // Spin every frame (cheap); only re-read the WASM population metadata and
+        // 54 sampled stickers when evolution advanced (or on first paint).
+        var repaint = steps > 0 || !this._swPainted;
+        var buf = repaint ? this.swarmLab.render() : null;
+        var N = Math.min(this.cards.length, this.swarmLab.member_count());
+        for (var i=0;i<N;i++){
+          var c = this.cards[i];
+          if (!this.reducedMotion){
+            c.rot += dt * c.spin;
+            if (c.inner) c.inner.style.transform = 'rotateX(-20deg) rotateY('+c.rot+'deg)';
+          }
+          if (!repaint) continue;
+          var b = i*62, pct = buf[b];
+          var mismatch = buf[b+1] | (buf[b+2] << 8);
+          var genes = buf[b+3] | (buf[b+4] << 8);
+          var stuck = buf[b+5];
+          var op = ['seed','mutation','crossover','restart'][buf[b+7]] || 'search';
+          // per-cell colour cache; reset if the design rebuilt this card's cells
+          if (!c.last || c._lastCells !== c.cells){ c.last = new Int8Array(54).fill(-1); c._lastCells = c.cells; }
+          for (var k=0;k<54;k++){
+            var cf=(k/9)|0, cell=k%9, wf=FACE_FOR_CARD[cf];
+            var ci = buf[b + 8 + wf*9 + cell];
+            // only touch the DOM when a sticker's colour actually changes
+            if (c.cells[k] && c.last[k] !== ci){ c.cells[k].style.background = SWPAL[ci] || SWPAL[0]; c.last[k] = ci; }
+          }
+          c.cring.style.strokeDashoffset = c.circ * (1 - pct/100);
+          if (pct >= 100){
+            c.cring.style.stroke = '#00A24B'; c.check.style.display='flex';
+            c.cnt.textContent='solved · '+op; c.cnt.style.color='#1BA64B';
+            c.card.style.borderColor='#CDEAD4'; c.card.style.boxShadow='0 4px 16px -6px rgba(27,166,75,.4)';
+          } else {
+            c.cring.style.stroke = this.accent; c.check.style.display='none';
+            c.cnt.textContent = mismatch + ' off · ' + genes + ' genes · ' + (stuck ? 'plateau '+stuck : op); c.cnt.style.color='#8C887F';
+            c.card.style.borderColor='#ECEAE4'; c.card.style.boxShadow='0 1px 2px rgba(20,20,18,.03)';
+          }
+        }
+        if (repaint){
+          this._swPainted = true;
+          var t=this.q('[data-swarm-total]'); if(t) t.textContent = this.swarmLab.converged().toLocaleString();
+          var r=this.q('[data-swarm-run]'); if(r) r.textContent = this.swarmLab.solving_now();
+          var a=this.q('[data-swarm-avg]'); if(a) a.textContent = Math.round(this.swarmLab.avg_progress()*100)+'%';
+        }
+      } catch(e){ console.warn('swarm update failed', e); this.swarmLab = null; }
+    };
+
+    function updateProof(self, scrambleLen, solutionLen){
+      var p = self.root.querySelector('[data-proof]'); var body = self.root.querySelector('[data-proof-body]');
+      if (!p || !body) return;
+      var cmp = (solutionLen < scrambleLen)
+        ? ('<b>'+solutionLen+' moves</b> — shorter than the '+scrambleLen+'-move scramble, so it cannot be replaying it.')
+        : ('<b>'+solutionLen+' moves</b> from the state alone — a fresh, verified path, not the scramble inverse.');
+      var stickerCount = 6 * self.n * self.n;
+      body.innerHTML = 'The scramble move history was withheld from the worker. It received only the cube state ('+stickerCount+' sticker colours) and searched for its own verified path: '+cmp;
+      p.style.display='block';
+    }
+
+    function wireExplanations(self){
+      var chips = self.root.querySelector('[data-sol-chips]');
+      if (chips && !self.root.querySelector('[data-proof]')){
+        var p = document.createElement('div'); p.setAttribute('data-proof','');
+        p.style.cssText = 'display:none;margin:2px 0 12px;padding:11px 13px;background:#F4F8F3;border:1px solid #E0EBDB;border-radius:12px;';
+        p.innerHTML = '<div style="display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600;letter-spacing:.07em;color:#4E8A4A;margin-bottom:6px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>SCRAMBLE HIDDEN FROM SOLVER</div><div data-proof-body style="font-size:12px;color:#5b5f54;line-height:1.5;"></div>';
+        chips.parentNode.insertBefore(p, chips);
+      }
+
+      var DESC = { det:'Searches forward from the scrambled state and backward from solved until the paths meet — exact & shortest.',
+                   beam:'Keeps the handful of partial solutions closest to solved at each step.',
+                   evo:'Evolves a population of move sequences — fittest survive, recombine, and mutate.' };
+      ['det','beam','evo'].forEach(function(k){
+        var el = self.root.querySelector('[data-lane="'+k+'"]'); if(!el) return;
+        el.setAttribute('title', DESC[k]);
+        if (!el.querySelector('[data-lane-desc]') && el.firstElementChild){
+          var d = document.createElement('div'); d.setAttribute('data-lane-desc','');
+          d.style.cssText='font-size:10px;color:#B7B3AA;margin:-2px 0 7px;line-height:1.35;';
+          d.textContent = DESC[k];
+          el.firstElementChild.insertAdjacentElement('afterend', d);
+        }
+      });
+      var grid = self.root.querySelector('[data-swarm]');
+      if (grid && !self.root.querySelector('[data-swarm-note]')){
+        var note = document.createElement('div'); note.setAttribute('data-swarm-note','');
+        note.style.cssText='font-size:12px;color:#7d7a72;line-height:1.55;margin:0 2px 14px;max-width:780px;';
+        note.innerHTML = 'Each cell is one <b>trial of the evolutionary solver</b>, and every trial starts as an exact copy of <b>your Studio cube</b>. They mutate and recombine until a trial reaches solved (it turns green, then restarts from the cube). Change the Studio scramble and the whole wall instantly re-syncs to it. The trials see only the cube state, never the scramble.';
+        var live = document.createElement('div'); live.setAttribute('data-swarm-live','');
+        live.style.cssText='font-size:11.5px;font-weight:500;color:#1573E6;margin:0 2px 12px;';
+        live.textContent = 'Tracking your Studio cube';
+        var msg = document.createElement('div'); msg.setAttribute('data-swarm-msg','');
+        msg.setAttribute('role','status'); msg.setAttribute('aria-live','polite');
+        msg.style.cssText='display:none;font-size:14px;color:#8C887F;line-height:1.6;background:#F7F6F2;border:1px solid #ECEAE4;border-radius:16px;padding:28px 26px;margin:6px 2px;max-width:720px;';
+        grid.parentNode.insertBefore(note, grid);
+        grid.parentNode.insertBefore(live, grid);
+        grid.parentNode.insertBefore(msg, grid);
+      }
+    }
+    (function(self){
+      // Scramble depth stays bounded so every offered challenge remains inside a
+      // measured solver path. Cube size is capped later from the active platform.
+      var sd = self.root.querySelector('[data-scramble]'); if (sd){ sd.max = 40; }
+      // The Calm/Lively swarm-speed toggle and the swarm count (16/36/…) selector
+      // don't add anything — hide them; the swarm just shows the whole wall.
+      self.root.querySelectorAll('[data-sspeed]').forEach(function(b){ var grp=b.parentElement; if(grp) grp.style.display='none'; });
+      self.root.querySelectorAll('[data-count]').forEach(function(b){ var grp=b.parentElement; if(grp) grp.style.display='none'; });
+    })(inst);
+    wireExplanations(inst);
+
+    // ---------- Solvability guidance: always say what Solve will do ----------
+    // SOLVE_MAX_DEPTH bounds the exact 2x2 search. Kociemba handles arbitrary 3x3
+    // scrambles; larger cubes scale to 20 turns per layer, matching the tested
+    // deterministic-reduction scramble range.
+    // The standalone browser build stays at the WASM-runtime-verified 5x5 ceiling.
+    var SOLVE_MAX_N = nativeCore() ? 11 : 5, SOLVE_MAX_DEPTH = 9,
+        SOLVE_3X3_DEPTH = 200, SCRAMBLE_TURNS_PER_LAYER = 20;
+    function scrambleDepthLimit(n){
+      return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : n * SCRAMBLE_TURNS_PER_LAYER;
+    }
+    function defaultScrambleDepth(n){
+      return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : scrambleDepthLimit(n);
+    }
+
+    function setCustomError(self, message){
+      var error=self.root.querySelector('[data-alg-error]');
+      if (!error) return;
+      error.textContent=message||'';
+      error.style.display=message ? 'block' : 'none';
+    }
+    function refreshCustomScramble(self){
+      var blocked=!!self.busy||!!self._solvePending, n=self.n||3;
+      var width=self.root.querySelector('[data-turn-width]');
+      if (width){
+        var previous=Math.max(1,Math.min(Number(width.value)||1,n>=4?Math.floor(n/2):1));
+        var maxWidth=n>=4?Math.floor(n/2):1;
+        if (width.dataset.n !== String(n)){
+          width.innerHTML='';
+          for (var w=1;w<=maxWidth;w++){
+            var option=document.createElement('option'); option.value=String(w);
+            option.textContent=w===1?'Outer face':(w+' layers wide'); width.appendChild(option);
+          }
+          width.dataset.n=String(n); width.value=String(Math.min(previous,maxWidth));
+        }
+        width.disabled=blocked;
+      }
+      var atCap=n===2 && (self.scrambleMoveCount||0)>=SOLVE_MAX_DEPTH;
+      self.root.querySelectorAll('[data-turn-face],[data-turn-amount],[data-alg-apply],[data-alg-clear]').forEach(function(el){ el.disabled=blocked||(el.hasAttribute('data-turn-face')&&atCap); });
+      var input=self.root.querySelector('[data-alg-input]'); if(input) input.disabled=blocked;
+      var undo=self.root.querySelector('[data-turn-undo]'); if(undo) undo.disabled=blocked||!!self.hasSolution||!(self._manualGroups&&self._manualGroups.length);
+      var replay=self.root.querySelector('[data-act-replay]');
+      if(replay){
+        var replayDisabled=blocked||!(self.lastSolution&&self.lastSolution.length);
+        replay.disabled=replayDisabled; replay.setAttribute('aria-disabled',String(replayDisabled));
+        replay.style.opacity=replayDisabled?'0.42':'1'; replay.style.pointerEvents=replayDisabled?'none':'auto';
+      }
+      self.root.querySelectorAll('[data-turn-amount]').forEach(function(el){
+        var on=Number(el.dataset.turnAmount)===(self._turnAmount||1);
+        el.setAttribute('aria-pressed',String(on)); el.style.background=on?'#fff':'transparent'; el.style.color=on?'#161514':'#66635C';
+        el.style.boxShadow=on?'0 1px 3px rgba(20,20,18,.1)':'none';
+      });
+      var count=self.root.querySelector('[data-custom-count]'); if(count){ var c=self.scrambleMoveCount||0; count.textContent=c+' move'+(c===1?'':'s'); }
+      var slider=self.root.querySelector('[data-nslider]');
+      if(slider){ slider.min='2'; slider.max=String(SOLVE_MAX_N); slider.step='1'; slider.value=String(n); slider.disabled=blocked; }
+      var inc=self.root.querySelector('[data-inc]'); if(inc) inc.disabled=blocked||n>=SOLVE_MAX_N;
+      var dec=self.root.querySelector('[data-dec]'); if(dec) dec.disabled=blocked||n<=2;
+    }
+    function commitCustomState(self, label){
+      var solved=false;
+      try { solved=!!(self.lab&&self.lab.is_solved()); } catch(e){}
+      self.queue=[]; self.activeMove=null; self.phase='idle'; self.busy=false;
+      self.scrambled=!solved; self.hasSolution=false; self._lastSolveTelemetry=null;
+      self.lastSolution=[]; self.realNotation=null; self.realMoveCount=null;
+      if (self.resetLanes) self.resetLanes();
+      if (self.setSolvedPct) self.setSolvedPct(solved?1:0);
+      if (self.ui&&self.ui.count) self.ui.count.style.display='none';
+      if (self.ui&&self.ui.move) self.ui.move.style.display='none';
+      if (self.ui&&self.ui.status) self.ui.status.textContent=solved?'Custom turns return to solved':(label||'Custom scramble ready to solve');
+      if (self.ui&&self.ui.solCount) self.ui.solCount.textContent='—';
+      if (self.ui&&self.ui.solChips) self.ui.solChips.innerHTML='<span style="font-size:12.5px;color:#66635C;">Solve this custom scramble to see a verified path.</span>';
+      if (self.syncControls) self.syncControls();
+      refreshCustomScramble(self);
+    }
+    function applyCustomAlgorithm(self){
+      if (self.busy||self._solvePending) return;
+      var input=self.root.querySelector('[data-alg-input]'), parsed;
+      try { parsed=parseCustomAlgorithm(input?input.value:'',self.n); }
+      catch(error){ setCustomError(self,String(error&&error.message||error)); return; }
+      setCustomError(self,'');
+      self.resetSolved(true);
+      clearScrambleHistory(self,false);
+      self._customBaseNotation=parsed.groups.map(function(g){return g.notation;}).join(' ');
+      self.scrambleMoveCount=parsed.groups.length;
+      parsed.moves.forEach(function(m){ self.applyInstant(m); self.lab.apply_design_move(m.axis,m.layer,m.dir); self.lastScramble.push(m); });
+      if (self.n===2 && self.scrambleDepth<parsed.groups.length){
+        self.scrambleDepth=parsed.groups.length;
+        var depth=self.root.querySelector('[data-scramble]'); if(depth) depth.value=String(self.scrambleDepth);
+        var value=self.root.querySelector('[data-scramble-val]'); if(value) value.textContent=String(self.scrambleDepth);
+      }
+      if (input) input.value=self._customBaseNotation;
+      commitCustomState(self,'Custom notation applied — ready to solve');
+    }
+    function applyInteractiveTurn(self, face){
+      if (self.busy||self._solvePending) return;
+      if (self.n===2&&(self.scrambleMoveCount||0)>=SOLVE_MAX_DEPTH){ setCustomError(self,'2×2 custom scrambles stop at 9 moves so the exact solver remains complete for the entered sequence.'); return; }
+      var width=self.root.querySelector('[data-turn-width]'), group;
+      try { group=makeFaceTurn(face,width?Number(width.value):1,self._turnAmount||1,self.n); }
+      catch(error){ setCustomError(self,String(error&&error.message||error)); return; }
+      setCustomError(self,'');
+      if (!self.scrambled&&self.hasSolution){ self.resetSolved(true); clearScrambleHistory(self,true); }
+      self._manualGroups=self._manualGroups||[]; self._manualGroups.push(group);
+      group.moves.forEach(function(m){ self.applyInstant(m); self.lab.apply_design_move(m.axis,m.layer,m.dir); self.lastScramble.push(m); });
+      self.scrambleMoveCount=(self.scrambleMoveCount||0)+1;
+      if (self.n===2&&self.scrambleDepth<self.scrambleMoveCount){
+        self.scrambleDepth=self.scrambleMoveCount;
+        var depth=self.root.querySelector('[data-scramble]'); if(depth) depth.value=String(self.scrambleDepth);
+        var depthValue=self.root.querySelector('[data-scramble-val]'); if(depthValue) depthValue.textContent=String(self.scrambleDepth);
+      }
+      var input=self.root.querySelector('[data-alg-input]');
+      if(input) input.value=[self._customBaseNotation,self._manualGroups.map(function(g){return g.notation;}).join(' ')].filter(Boolean).join(' ');
+      commitCustomState(self,group.notation+' applied — ready to solve');
+    }
+    function undoInteractiveTurn(self){
+      if (self.busy||self._solvePending||self.hasSolution||!self._manualGroups||!self._manualGroups.length) return;
+      var group=self._manualGroups.pop();
+      group.moves.slice().reverse().forEach(function(m){ var inv={axis:m.axis,layer:m.layer,dir:-m.dir}; self.applyInstant(inv); self.lab.apply_design_move(inv.axis,inv.layer,inv.dir); });
+      self.lastScramble.splice(Math.max(0,self.lastScramble.length-group.moves.length),group.moves.length);
+      self.scrambleMoveCount=Math.max(0,(self.scrambleMoveCount||0)-1);
+      var input=self.root.querySelector('[data-alg-input]');
+      if(input) input.value=[self._customBaseNotation,self._manualGroups.map(function(g){return g.notation;}).join(' ')].filter(Boolean).join(' ');
+      setCustomError(self,''); commitCustomState(self,'Last manual turn removed');
+    }
+    function configureSupportedSizes(self){
+      self.CUBIE_MAX=SOLVE_MAX_N;
+      self.sliderToN=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
+      self.nToSlider=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
+      self.root.querySelectorAll('[data-n]').forEach(function(button){
+        var supported=Number(button.dataset.n)<=SOLVE_MAX_N; button.style.display=supported?'':'none';
+        if (supported) button.title='Runs a replay-verified solver';
+      });
+      var note=self.root.querySelector('[data-size-note]');
+      if(note) note.innerHTML='Only replay-verified sizes are offered. <b>'+(nativeCore()?'Desktop':'Browser')+': 2×2–'+SOLVE_MAX_N+'×'+SOLVE_MAX_N+'.</b> Larger cubes are hidden because their runtime and memory costs are not yet reliable enough for a product promise.';
+      if (self.n>SOLVE_MAX_N) self.setN(SOLVE_MAX_N);
+    }
+    function wireCustomScramble(self){
+      self._manualGroups=[]; self._customBaseNotation=''; self._turnAmount=1; self._refreshCustomScramble=refreshCustomScramble;
+      var apply=self.root.querySelector('[data-alg-apply]'); if(apply) apply.addEventListener('click',function(){applyCustomAlgorithm(self);});
+      var clear=self.root.querySelector('[data-alg-clear]'); if(clear) clear.addEventListener('click',function(){ var input=self.root.querySelector('[data-alg-input]');if(input)input.value='';setCustomError(self,'');self.resetSolved(); });
+      var input=self.root.querySelector('[data-alg-input]'); if(input) input.addEventListener('keydown',function(e){if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();applyCustomAlgorithm(self);}});
+      self.root.querySelectorAll('[data-turn-amount]').forEach(function(button){button.addEventListener('click',function(){self._turnAmount=Number(button.dataset.turnAmount);refreshCustomScramble(self);});});
+      self.root.querySelectorAll('[data-turn-face]').forEach(function(button){button.addEventListener('click',function(){applyInteractiveTurn(self,button.dataset.turnFace);});});
+      var undo=self.root.querySelector('[data-turn-undo]'); if(undo) undo.addEventListener('click',function(){undoInteractiveTurn(self);});
+      var previousSync=self.syncControls.bind(self);
+      self.syncControls=function(){ previousSync(); refreshCustomScramble(this); };
+      refreshCustomScramble(self);
+    }
+    configureSupportedSizes(inst);
+    wireCustomScramble(inst);
+
+    // Entering Swarm should visibly do work. Small cubes already launch genuine
+    // evolutionary trials; supported large cubes auto-start truthful reduction.
+    // Polling while an early, pre-WASM visual scramble finishes closes the mount
+    // race where the user opens Swarm before wireRealSolver() is installed.
+    function scheduleSwarmReduction(self){
+      clearTimeout(self._swarmAutoStartTimer);
+      self._swarmAutoStartTimer=null;
+      if (self.view !== 'swarm' || (self.n||3) <= SWARM_MAX || (self.n||3) > SOLVE_MAX_N || self._solvePending || (self.busy && self.phase === 'solving')) return;
+      var attempt=function(){
+        self._swarmAutoStartTimer=null;
+        if (self.view !== 'swarm' || (self.n||3) <= SWARM_MAX || (self.n||3) > SOLVE_MAX_N || self._solvePending || (self.busy && self.phase === 'solving')) return;
+        if (self.busy){
+          if (self.phase === 'scrambling') self._swarmAutoStartTimer=setTimeout(attempt, 120);
+          return;
+        }
+        if (!self.scrambled) self.scramble();
+        if (self.busy){ self._swarmAutoStartTimer=setTimeout(attempt, 120); return; }
+        if (self.scrambled && !self._solvePending) self.solve();
+      };
+      self._swarmAutoStartTimer=setTimeout(attempt, 120);
+    }
+    if (origSetView) inst.setView = function(v){
+      origSetView(v);
+      scheduleSwarmReduction(this);
+    };
+
+    // Make the "Solver Race" panel honest about which engine actually runs:
+    //   • 2×2 — three real engines race (meet-in-the-middle, beam, island genetic);
+    //   • 3×3 — the two-phase (Kociemba) solver, shown as one near-optimal lane with
+    //           the other two hidden (they don't run for the 3×3);
+    //   • 4×4–11×11 — one reduction lane (centers → edges → 3×3 + parity).
+    function laneLabelEl(el){ return (el && el.firstElementChild) ? el.firstElementChild.children[1] : null; }
+    function applyEngineLabels(self){
+      var n = self.n || 3;
+      if (!self._origLane){
+        self._origLane = {};
+        ['det','beam','evo'].forEach(function(k){
+          var el = self.root.querySelector('[data-lane="'+k+'"]');
+          var lab = laneLabelEl(el);
+          var st = el && el.querySelector('[data-stat]');
+          self._origLane[k] = { label: lab ? lab.textContent : '', stat: st ? st.textContent : '' };
+        });
+      }
+      var twoPhase = (n === 3);
+      var reduction = (n >= 4 && n <= SOLVE_MAX_N);
+      var nativeRcube = reduction && hasNativeReduction(self);
+      var singleEngine = twoPhase || reduction;
+      // Hide non-running lanes whenever a dedicated complete solver owns the size.
+      ['beam','evo'].forEach(function(k){
+        var el = self.root.querySelector('[data-lane="'+k+'"]'); if (el) el.style.display = singleEngine ? 'none' : '';
+      });
+      var detEl = self.root.querySelector('[data-lane="det"]');
+      var detLab = laneLabelEl(detEl);
+      var detDesc = detEl && detEl.querySelector('[data-lane-desc]');
+      if (detLab) detLab.textContent = twoPhase
+        ? 'Two-phase (Kociemba)'
+        : reduction ? (nativeRcube ? 'RCube large-cube engine' : 'N×N reduction') : (self._origLane.det.label || 'Meet-in-the-middle');
+      if (detDesc) detDesc.textContent = twoPhase
+        ? 'Orients corners and edges into the UD-slice subgroup, then solves the permutation within it — a near-optimal solution for any 3×3 scramble.'
+        : reduction
+          ? nativeRcube
+            ? 'Uses RCube center, corner, and edge solving; every returned move is replayed by the Rust cube model before animation.'
+            : 'Solves centers, pairs wing orbits, resolves parity, then finishes the reduced 3×3; every returned path is replay-verified.'
+          : 'Searches forward from the scrambled state and backward from solved until the paths meet — exact & shortest.';
+      var head = self.root.querySelector('[data-race-head]');
+      var sub = self.root.querySelector('[data-race-sub]');
+      if (head) head.textContent = twoPhase ? 'BEST-PATH SOLVER' : reduction ? (nativeRcube ? 'RCUBE SOLVER' : 'REDUCTION SOLVER') : 'SOLVER RACE';
+      if (sub) sub.textContent = twoPhase
+        ? 'two-phase solver — near-optimal, never the scramble inverse'
+        : reduction
+          ? nativeRcube
+            ? 'RCube engine · centers → corners → edges · independent replay'
+            : 'centers → wing pairing → reduced 3×3 + parity'
+          : '3 strategies on the cube state — none see the scramble';
+      // Clear any stale per-lane result (e.g. when switching N) so a previous
+      // solve's "verified · N moves ★" doesn't linger. Never touch lanes mid-solve.
+      if (!self.busy){
+        ['det','beam','evo'].forEach(function(k){
+          var el = self.root.querySelector('[data-lane="'+k+'"]'); if (!el) return;
+          var st = el.querySelector('[data-stat]'), fl = el.querySelector('[data-fill]'),
+              pc = el.querySelector('[data-pct2]'), sr = el.querySelector('[data-star]');
+          if (st) st.textContent = self._origLane[k].stat;
+          if (fl) fl.style.width = '0%';
+          if (pc) pc.textContent = '0%';
+          if (sr) sr.style.display = 'none';
+        });
+      }
+    }
+    inst._applyEngineLabels = applyEngineLabels;
+
+    function refreshSolvability(self){
+      applyEngineLabels(self);
+      var ban = self.root.querySelector('[data-solvability]'); if(!ban) return;
+      var n = self.n||3, d = self.scrambleDepth||6;
+      // Scale larger-cube scrambles with N while keeping 2x2 inside exact-search
+      // reach and 3x3 at the requested 200-turn maximum.
+      var sd = self.root.querySelector('[data-scramble]');
+      if (sd){
+        var cap = (n > SOLVE_MAX_N) ? n * SCRAMBLE_TURNS_PER_LAYER : scrambleDepthLimit(n);
+        if (+sd.max !== cap){
+          sd.max = cap;
+          if (+sd.value > cap){ sd.value = cap; sd.dispatchEvent(new Event('input', { bubbles: true })); d = self.scrambleDepth || cap; }
+        }
+      }
+      if (n > SOLVE_MAX_N){
+        ban.style.cssText = ban._base + 'background:#FCEEEE;color:#973B3B;border-color:#EDCACA;';
+        ban.innerHTML = '<b>Unsupported size.</b> Choose 2×2 through '+SOLVE_MAX_N+'×'+SOLVE_MAX_N+' so every Solve result can be independently replay-verified.';
+      } else if (n === 2 && d > SOLVE_MAX_DEPTH){
+        ban.style.cssText = ban._base + 'background:#FBF4E8;color:#9A6A1E;border-color:#F0E0C2;';
+        ban.innerHTML = '<b>Deep scramble (depth '+d+').</b> The exact solver may run out of budget. Keep depth ≤ '+SOLVE_MAX_DEPTH+' for a guaranteed solve.';
+      } else {
+        ban.style.cssText = ban._base + 'background:#F1F8F0;color:#3F7A3A;border-color:#D9EAD5;';
+        ban.innerHTML = '<b>Ready to solve.</b> Press <b>Scramble</b>, then <b>Solve</b> — the engines below find a verified solution and play it back.';
+      }
+    }
+    inst._refreshSolvability = refreshSolvability;
+    (function(self){
+      var solveBtn = self.root.querySelector('[data-onclick="onSolve"]');
+      if (solveBtn && solveBtn.parentNode && !self.root.querySelector('[data-solvability]')){
+        var ban = document.createElement('div'); ban.setAttribute('data-solvability','');
+        ban._base = 'font-size:12px;line-height:1.5;border:1px solid;border-radius:12px;padding:10px 12px;margin:0 0 12px;';
+        solveBtn.parentNode.insertBefore(ban, solveBtn);
+      }
+      // Cancel button (shown only while a solve is running in the worker).
+      if (solveBtn && solveBtn.parentNode && !self.root.querySelector('[data-cancel-solve]')){
+        var cb = document.createElement('button'); cb.setAttribute('data-cancel-solve',''); cb.type='button';
+        cb.textContent = '✕  Cancel solve';
+        cb.style.cssText = 'display:none;width:100%;height:42px;margin-top:10px;border-radius:13px;border:1px solid #E6C9C9;background:#FCF1F1;color:#A23B3B;font-size:13px;font-weight:600;cursor:pointer;';
+        cb.addEventListener('click', function(){ cancelSolve(self); });
+        solveBtn.parentNode.insertBefore(cb, solveBtn.nextSibling);
+      }
+      ['2','3','4','5','7','11'].forEach(function(v){
+        var b = self.root.querySelector('[data-n="'+v+'"]');
+        if(!b) return;
+        if(Number(v) > SOLVE_MAX_N){
+          b.style.display='none';
+        } else {
+          b.style.opacity='1'; b.title='Runs the real replay-verified solver';
+        }
+      });
+      var sd2 = self.root.querySelector('[data-scramble]');
+      if (sd2) sd2.addEventListener('input', function(){ setTimeout(function(){ refreshSolvability(self); }, 0); });
+      refreshSolvability(self);
+    })(inst);
+
+    // componentDidMount starts before WASM finishes loading. Rebuild the wall
+    // once the real Swarm constructor is available so an early WebGL failure or
+    // mount race can never leave the Swarm tab blank/inert.
+    try { if (inst.initSwarm) inst.initSwarm(); } catch(e){ console.warn('swarm remount failed', e); }
+    function ensureAnimationLoop(self){
+      if (self._raf || !window.THREE || !self.loop) return;
+      if (!self.clock) self.clock = new window.THREE.Clock();
+      self.loop();
+    }
+    ensureAnimationLoop(inst);
+    scheduleSwarmReduction(inst);
+  }
+
+  function markLive(){}
+
+
+  function bindAndMount(){
+    const props = { autoSpin: true, accent: '#161514', palette: 'Classic' };
+    const inst = new Component(props);
+    const vals = inst.renderVals ? inst.renderVals() : {};
+    document.querySelectorAll('[data-dcref]').forEach(el => {
+      const fn = vals[el.getAttribute('data-dcref')];
+      if (typeof fn === 'function') fn(el);
+    });
+    const evmap = { 'data-onclick':'click', 'data-onchange':'input' };
+    Object.keys(evmap).forEach(attr => {
+      document.querySelectorAll('['+attr+']').forEach(el => {
+        const fn = vals[el.getAttribute(attr)];
+        if (typeof fn === 'function') el.addEventListener(evmap[attr], fn);
+      });
+    });
+    // Some webviews (esp. WebKitGTK on Linux VMs/headless) can't create a WebGL
+    // context. Without this guard the thrown error aborts mount and the WHOLE app
+    // is dead. Catch it, stub the renderer, and keep the solver UI usable.
+    if (typeof inst.initThree === 'function'){
+      const origInitThree = inst.initThree.bind(inst);
+      inst.initThree = function(){
+        try { origInitThree(); }
+        catch(e){
+          console.warn('WebGL unavailable — 3D view disabled; the solver still works.', e);
+          const T = window.THREE; this._noWebGL = true;
+          this.renderer = this.renderer || { render:function(){}, setSize:function(){}, setPixelRatio:function(){}, domElement: document.createElement('canvas') };
+          if (T){ this.scene = this.scene || new T.Scene(); this.camera = this.camera || new T.PerspectiveCamera(50,1,0.1,100); this.cubeGroup = this.cubeGroup || new T.Group(); this.clock = this.clock || new T.Clock(); }
+          const stage = this.root && this.root.querySelector('[data-stage]');
+          if (stage){ const m=document.createElement('div'); m.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#8C887F;font-size:13px;padding:24px;'; m.innerHTML='3D view unavailable (no WebGL on this system).<br>Scramble &amp; Solve still work.'; stage.appendChild(m); }
+        }
+      };
+    }
+    // componentDidMount calls buildCube immediately after initThree. If renderer
+    // creation failed, the authored materials do not exist yet; skip only the 3D
+    // build so mount, WASM loading, controls, and Swarm can still complete.
+    function recoverNoWebGLBuild(self, n){
+      self.N = n; self.mode = 'cubie';
+      self.cubies = []; self.activeMove = null;
+      if (self.updateBadges) self.updateBadges();
+    }
+    function useTextureBuildWithoutWebGL(self, n){ return n > (self.CUBIE_MAX || 11); }
+    if (typeof inst.buildCube === 'function'){
+      const origMountBuildCube = inst.buildCube.bind(inst);
+      inst.buildCube = function(n){
+        // The texture path is renderer-independent and initializes texFaces,
+        // which scrambleTexture/advanceTexture require even when rendering is stubbed.
+        if (!this._noWebGL || useTextureBuildWithoutWebGL(this, n)) return origMountBuildCube(n);
+        recoverNoWebGLBuild(this, n);
+      };
+    }
+    if (typeof inst.componentDidMount === 'function') inst.componentDidMount();
+    return inst;
+  }
+  function lockUntilSolverReady(inst){
+    const originals={solve:inst.solve,scramble:inst.scramble,replay:inst.replay,setN:inst.setN};
+    inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
+    const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
+    inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
+    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-n],[data-inc],[data-dec],[data-nslider],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
+    inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=true;el.setAttribute('aria-disabled','true');});
+    blocked();
+    return {
+      restoreMethods:function(){inst.solve=originals.solve;inst.scramble=originals.scramble;inst.replay=originals.replay;inst.setN=originals.setN;},
+      lockMethods:function(){inst.solve=blocked;inst.scramble=blocked;inst.replay=blocked;inst.setN=blocked;},
+      enableControls:function(){inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=false;el.removeAttribute('aria-disabled');});}
+    };
+  }
+  async function boot(){
+    const inst = bindAndMount();
+    window.__cubeLab = inst;
+    const gate=lockUntilSolverReady(inst);
+    try {
+      await init();
+      gate.restoreMethods();
+      inst.lab = new CubeLab(inst.n);
+      wireRealSolver(inst);
+      inst._solverReady=true;
+      gate.enableControls();
+      if(inst.syncControls)inst.syncControls();
+      markLive();
+    } catch (e){
+      gate.lockMethods();
+      inst._solverLoadMessage='Solver failed to load — reload the app';
+      console.warn('WASM failed to load — solver unavailable.', e);
+      const status = inst.ui && inst.ui.status;
+      if (status) status.textContent = inst._solverLoadMessage;
+    }
+  }
+  boot();
+
+</script>
+</body>
+</html>

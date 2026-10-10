@@ -1,0 +1,10 @@
+[package]
+name = "headless_solver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cube_core = { path = "../crates/cube_core" }
+cube_solver = { path = "../crates/cube_solver", features = ["reduction"] }
+serde_json = "1"
+rand = "0.9"

@@ -1,0 +1,502 @@
+#!/usr/bin/env python3
+"""Dependency-free structural/runtime-contract smoke checks for the generated UI."""
+
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+INDEX = ROOT / "web" / "index.html"
+WORKER = ROOT / "web" / "solver-worker.js"
+ROOT_LICENSE = ROOT / "LICENSE"
+WASM_LICENSE = ROOT / "crates" / "cube_wasm" / "LICENSE"
+RCUBE_LICENSE = ROOT / "src-tauri" / "rcube" / "LICENSE"
+WASM_PACKAGE = ROOT / "web" / "pkg" / "package.json"
+TAURI_CONFIG = ROOT / "src-tauri" / "tauri.conf.json"
+FLATPAK_MANIFEST = ROOT / "packaging" / "flatpak" / "io.github.adamnolle.cubesolver.yml"
+FLATPAK_METAINFO = ROOT / "packaging" / "flatpak" / "io.github.adamnolle.cubesolver.metainfo.xml"
+
+
+class AuditParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ids: set[str] = set()
+        self.roles: list[tuple[str, dict[str, str]]] = []
+        self.external_resources: list[str] = []
+        self.tag_counts: dict[str, int] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = {key: value or "" for key, value in attrs}
+        self.tag_counts[tag] = self.tag_counts.get(tag, 0) + 1
+        if values.get("id"):
+            self.ids.add(values["id"])
+        if values.get("role"):
+            self.roles.append((values["role"], values))
+        for key in ("src", "href"):
+            ref = values.get(key, "")
+            if ref.startswith(("http://", "https://", "//")):
+                self.external_resources.append(ref)
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def node_check(source: str, suffix: str) -> None:
+    node = shutil.which("node")
+    require(node is not None, "node is required for frontend syntax smoke checks")
+    with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as file:
+        path = Path(file.name)
+        file.write(source)
+    try:
+        subprocess.run([node, "--check", str(path)], check=True)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def check_lattice_rotation(module: str) -> None:
+    """Execute the authored index rotator across odd and even cube lattices."""
+    match = re.search(
+        r"rotatedIdx\(idx, m\) \{(?P<body>.*?)\n  \}\n\n  positionForIdx",
+        module,
+        re.DOTALL,
+    )
+    require(match is not None, "exact cubie lattice rotator missing")
+    script = f"""
+const rotate = function(idx, m) {{{match.group('body')}}};
+for (let n = 2; n <= 11; n++) {{
+  const ctx = {{ N: n }};
+  const points = [];
+  for (let x=0; x<n; x++) for (let y=0; y<n; y++) for (let z=0; z<n; z++)
+    if (x===0 || y===0 || z===0 || x===n-1 || y===n-1 || z===n-1) points.push([x,y,z]);
+  const matrixRotate = (point, axis, dir) => {{
+    const half = (n - 1) / 2;
+    const [x,y,z] = point.map(v => v - half);
+    let q;
+    if (axis === 0) q = dir > 0 ? [x,-z,y] : [x,z,-y];
+    else if (axis === 1) q = dir > 0 ? [z,y,-x] : [-z,y,x];
+    else q = dir > 0 ? [-y,x,z] : [y,-x,z];
+    return q.map(v => Math.round(v + half));
+  }};
+  for (let axis=0; axis<3; axis++) for (const dir of [-1, 1]) {{
+    const mapped = points.map(p => rotate.call(ctx, p, {{axis, dir}}));
+    const keys = new Set(mapped.map(p => p.join(',')));
+    if (keys.size !== points.length || mapped.some(p => p.some(v => v < 0 || v >= n)))
+      throw new Error(`invalid ${{n}}x${{n}} axis=${{axis}} dir=${{dir}} lattice map`);
+    for (const point of points) {{
+      const expected = matrixRotate(point, axis, dir);
+      const actual = rotate.call(ctx, point, {{axis, dir}});
+      if (actual.some((v, i) => v !== expected[i])) throw new Error('index turn disagrees with right-hand quaternion rotation');
+      let p = point;
+      for (let turn=0; turn<4; turn++) p = rotate.call(ctx, p, {{axis, dir}});
+      if (p.some((v, i) => v !== point[i])) throw new Error('quarter turn is not order four');
+      p = rotate.call(ctx, rotate.call(ctx, point, {{axis, dir}}), {{axis, dir:-dir}});
+      if (p.some((v, i) => v !== point[i])) throw new Error('inverse turn did not restore point');
+    }}
+  }}
+}}
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_cubie_layer_index(module: str) -> None:
+    """Check layer membership stays exact as turns move cubies between layers."""
+    build_match = re.search(
+        r"buildCubieLayerIndex\(\) \{(?P<body>.*?)\n  \}\n\n  updateCubieLayerIndex",
+        module,
+        re.DOTALL,
+    )
+    update_match = re.search(
+        r"updateCubieLayerIndex\(c, prevIdx, nextIdx, fixedAxis\) \{(?P<body>.*?)\n  \}\n\n  buildTextureCube",
+        module,
+        re.DOTALL,
+    )
+    rotate_match = re.search(
+        r"rotatedIdx\(idx, m\) \{(?P<body>.*?)\n  \}\n\n  positionForIdx",
+        module,
+        re.DOTALL,
+    )
+    require(build_match is not None, "cubie layer index builder missing")
+    require(update_match is not None, "cubie layer index updater missing")
+    require(rotate_match is not None, "exact cubie lattice rotator missing")
+    script = f"""
+const build = function() {{{build_match.group('body')}}};
+const update = function(c, prevIdx, nextIdx, fixedAxis) {{{update_match.group('body')}}};
+const rotate = function(idx, m) {{{rotate_match.group('body')}}};
+for (let n=2; n<=11; n++) {{
+  const ctx={{N:n,cubies:[],cubieLayers:null}};
+  for (let x=0; x<n; x++) for (let y=0; y<n; y++) for (let z=0; z<n; z++) {{
+    if (x===0 || y===0 || z===0 || x===n-1 || y===n-1 || z===n-1)
+      ctx.cubies.push({{mesh:{{userData:{{idx:[x,y,z]}}}}}});
+  }}
+  build.call(ctx);
+  for (let pass=0; pass<3; pass++) {{
+    for (let axis=0; axis<3; axis++) for (let layer=0; layer<n; layer++) {{
+      const move={{axis,layer,dir:((pass+axis+layer)%2) ? 1 : -1}};
+      Array.from(ctx.cubieLayers[axis][layer]).forEach(c=>{{
+        const prev=c.mesh.userData.idx, next=rotate.call(ctx,prev,move);
+        update.call(ctx,c,prev,next,axis);
+        c.mesh.userData.idx=next;
+      }});
+      for (let a=0; a<3; a++) for (let l=0; l<n; l++) {{
+        const expected=ctx.cubies.filter(c=>c.mesh.userData.idx[a]===l);
+        const actual=ctx.cubieLayers[a][l];
+        if (actual.size!==expected.length || expected.some(c=>!actual.has(c)))
+          throw new Error(`stale layer index for ${{n}}x${{n}} axis=${{a}} layer=${{l}}`);
+      }}
+    }}
+  }}
+}}
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_size_scaled_scramble_depth(module: str) -> None:
+    """Verify scramble depths scale with supported size and preserve the 3x3 default."""
+    limit_match = re.search(
+        r"function scrambleDepthLimit\(n\)\{(?P<body>.*?)\n    \}",
+        module,
+        re.DOTALL,
+    )
+    default_match = re.search(
+        r"function defaultScrambleDepth\(n\)\{(?P<body>.*?)\n    \}",
+        module,
+        re.DOTALL,
+    )
+    require(limit_match is not None, "size-scaled scramble depth limit missing")
+    require(default_match is not None, "size-scaled default scramble depth missing")
+    script = f"""
+const limit=function(n) {{{limit_match.group('body')}}};
+const scrambleDepthLimit=limit;
+const defaultDepth=function(n) {{{default_match.group('body')}}};
+const SOLVE_MAX_DEPTH=9, SOLVE_3X3_DEPTH=200, SCRAMBLE_TURNS_PER_LAYER=20;
+for(let n=2;n<=11;n++) {{
+  const expected=n===2?9:n===3?200:n*20;
+  if(limit(n)!==expected || defaultDepth(n)!==expected)
+    throw new Error(`wrong scramble depth for ${{n}}x${{n}}: ${{limit(n)}} / ${{defaultDepth(n)}}`);
+}}
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_swarm_scheduler(module: str) -> None:
+    """Exercise the generated early-mount/idle Swarm scheduling state machine."""
+    match = re.search(
+        r"function scheduleSwarmReduction\(self\)\{(?P<body>.*?)\n    \}\n    if \(origSetView\)",
+        module,
+        re.DOTALL,
+    )
+    require(match is not None, "Swarm reduction scheduler missing")
+    script = f"""
+const SWARM_MAX=3, SOLVE_MAX_N=11;
+let timers=[];
+globalThis.setTimeout=(fn) => {{ timers.push(fn); return timers.length; }};
+globalThis.clearTimeout=() => {{}};
+const schedule=function(self) {{{match.group('body')}}};
+function runOne() {{ const fn=timers.shift(); if (!fn) throw new Error('expected timer'); fn(); }}
+let calls={{solve:0,scramble:0}};
+let state={{view:'swarm',n:6,busy:true,phase:'scrambling',scrambled:true,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;this.scrambled=true;}}}};
+schedule(state); runOne();
+if (calls.solve !== 0 || timers.length !== 1) throw new Error('busy pre-WASM scramble was not deferred');
+state.busy=false; runOne();
+if (calls.solve !== 1) throw new Error('idle reduction did not auto-start');
+timers=[]; calls={{solve:0,scramble:0}};
+state={{view:'swarm',n:4,busy:false,scrambled:false,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;this.scrambled=true;}}}};
+schedule(state); runOne();
+if (calls.scramble !== 1 || calls.solve !== 1) throw new Error('unscrambled Swarm did not scramble then solve');
+timers=[]; calls={{solve:0,scramble:0}};
+state={{view:'studio',n:6,busy:false,scrambled:true,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;}}}};
+schedule(state);
+if (timers.length || calls.solve) throw new Error('Studio view scheduled a Swarm solve');
+state.view='swarm'; state._solvePending=true; schedule(state);
+if (timers.length || calls.solve) throw new Error('pending solve was duplicated');
+state._solvePending=false; state.busy=true; state.phase='solving'; schedule(state);
+if (timers.length || calls.solve) throw new Error('verified replay scheduled a duplicate solve');
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_boot_recovery(module: str) -> None:
+    """Execute pre-WASM state sync and no-WebGL/RAF recovery helpers."""
+    sync_match = re.search(
+        r"function syncLabFromVisibleScramble\(self\)\{(?P<body>.*?)\n    \}\n    syncLabFromVisibleScramble\(inst\)",
+        module,
+        re.DOTALL,
+    )
+    build_match = re.search(
+        r"function recoverNoWebGLBuild\(self, n\)\{(?P<body>.*?)\n    \}\n    function useTextureBuildWithoutWebGL",
+        module,
+        re.DOTALL,
+    )
+    texture_match = re.search(
+        r"function useTextureBuildWithoutWebGL\(self, n\)\{(?P<body>.*?)\}",
+        module,
+        re.DOTALL,
+    )
+    loop_match = re.search(
+        r"function ensureAnimationLoop\(self\)\{(?P<body>.*?)\n    \}\n    ensureAnimationLoop\(inst\)",
+        module,
+        re.DOTALL,
+    )
+    require(sync_match is not None, "pre-WASM scramble synchronizer missing")
+    require(build_match is not None, "no-WebGL build recovery missing")
+    require(texture_match is not None, "no-WebGL texture initialization route missing")
+    require(loop_match is not None, "single-RAF recovery helper missing")
+    require(
+        module.index("syncLabFromVisibleScramble(inst)") < module.index("scheduleSwarmReduction(inst)"),
+        "pre-WASM scramble must synchronize before Swarm auto-start",
+    )
+    script = f"""
+const sync=function(self) {{{sync_match.group('body')}}};
+let applied=[];
+const lab={{set_size(n){{this.n=n;}},reset(){{this.resets=(this.resets||0)+1;applied=[];}},apply_design_move(a,l,d){{applied.push([a,l,d]);}}}};
+let state={{lab,n:6,scrambled:true,lastScramble:[{{axis:0,layer:5,dir:1}},{{axis:2,layer:0,dir:-1}}]}};
+sync(state);
+if (lab.n!==6 || lab.resets!==1 || JSON.stringify(applied)!=='[[0,5,1],[2,0,-1]]') throw new Error('pre-WASM scramble was not mirrored exactly');
+state.scrambled=false; sync(state);
+if (lab.resets!==2 || applied.length) throw new Error('solved visible state did not reset the lab');
+const recover=function(self,n) {{{build_match.group('body')}}};
+let badges=0, view={{CUBIE_MAX:11,cubies:[1],activeMove:{{}},updateBadges(){{badges++;}}}};
+recover(view,6);
+if (view.N!==6 || view.mode!=='cubie' || view.cubies.length || view.activeMove!==null || badges!==1) throw new Error('cubie no-WebGL recovery failed');
+const useTexture=function(self,n) {{{texture_match.group('body')}}};
+if (useTexture(view,6) || !useTexture(view,20)) throw new Error('no-WebGL texture path was not preserved for large cubes');
+let loops=0;
+globalThis.window={{THREE:{{Clock:class Clock{{}}}}}};
+const ensure=function(self) {{{loop_match.group('body')}}};
+let runtime={{_raf:null,clock:null,loop(){{loops++;this._raf=7;}}}};
+ensure(runtime); ensure(runtime);
+if (loops!==1 || !runtime.clock) throw new Error('RAF recovery duplicated or omitted the loop');
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_custom_scramble(module: str) -> None:
+    """Execute notation parsing and standard face-direction mapping."""
+    format_match = re.search(
+        r"function formatFaceTurn\(face, width, amount\)\{(?P<body>.*?)\n    \}\n    function makeFaceTurn",
+        module,
+        re.DOTALL,
+    )
+    make_match = re.search(
+        r"function makeFaceTurn\(face, width, amount, n\)\{(?P<body>.*?)\n    \}\n    function parseCustomAlgorithm",
+        module,
+        re.DOTALL,
+    )
+    parse_match = re.search(
+        r"function parseCustomAlgorithm\(text, n\)\{(?P<body>.*?)\n    \}\n    function clearScrambleHistory",
+        module,
+        re.DOTALL,
+    )
+    require(format_match is not None, "custom notation formatter missing")
+    require(make_match is not None, "interactive face-turn mapper missing")
+    require(parse_match is not None, "custom algorithm parser missing")
+    script = f"""
+const formatFaceTurn=function(face,width,amount) {{{format_match.group('body')}}};
+const makeFaceTurn=function(face,width,amount,n) {{{make_match.group('body')}}};
+const parseCustomAlgorithm=function(text,n) {{{parse_match.group('body')}}};
+const parsed=parseCustomAlgorithm("R U R' U' Rw2 F2 3Rw",6);
+if (parsed.groups.map(g=>g.notation).join(' ')!=="R U R' U' Rw2 F2 3Rw") throw new Error('notation was not normalized');
+if (parsed.moves.length!==13) throw new Error('wide/half turns expanded incorrectly');
+const right=makeFaceTurn('R',1,1,4).moves[0];
+const left=makeFaceTurn('L',1,1,4).moves[0];
+const leftPrime=makeFaceTurn('L',1,-1,4).moves[0];
+if (JSON.stringify(right)!=='{{"axis":0,"layer":3,"dir":1}}') throw new Error('R direction mismatch');
+if (JSON.stringify(left)!=='{{"axis":0,"layer":0,"dir":-1}}' || leftPrime.dir!==1) throw new Error('L direction mismatch');
+for (const invalid of [['Rw',3],['3Rw',4],['Q',6],['R '.repeat(10),2]]) {{
+  let failed=false; try {{ parseCustomAlgorithm(invalid[0],invalid[1]); }} catch(e) {{ failed=true; }}
+  if (!failed) throw new Error('invalid/unsupported custom notation was accepted: '+invalid[0]);
+}}
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def check_scramble_lifecycle_and_boot_gate(module: str) -> None:
+    """Exercise coherent history reset/rebuild and the fail-closed WASM boot gate."""
+    clear_match = re.search(
+        r"function clearScrambleHistory\(self, clearInput\)\{(?P<body>.*?)\n    \}\n    function rebuildFromScrambleHistory",
+        module,
+        re.DOTALL,
+    )
+    rebuild_match = re.search(
+        r"function rebuildFromScrambleHistory\(self\)\{(?P<body>.*?)\n    \}\n\n    inst\.scramble",
+        module,
+        re.DOTALL,
+    )
+    gate_match = re.search(
+        r"function lockUntilSolverReady\(inst\)\{(?P<body>.*?)\n  \}\n  async function boot",
+        module,
+        re.DOTALL,
+    )
+    require(clear_match is not None, "coherent scramble-history reset helper missing")
+    require(rebuild_match is not None, "visible/Rust scramble rebuild helper missing")
+    require(gate_match is not None, "fail-closed solver boot gate missing")
+    restore_index = module.index("gate.restoreMethods()")
+    wire_index = module.index("wireRealSolver(inst)", restore_index)
+    enable_index = module.index("gate.enableControls()", wire_index)
+    require(
+        restore_index < wire_index < enable_index,
+        "solver methods must be restored for wiring but controls enabled only after wiring succeeds",
+    )
+    script = f"""
+let input={{value:'R U'}}, error='';
+globalThis.setCustomError=(self,value)=>{{error=value;}};
+const clear=function(self,clearInput) {{{clear_match.group('body')}}};
+let state={{lastScramble:[1],lastSolution:[2],_manualGroups:[3],_customBaseNotation:'R U',scrambleMoveCount:9,realNotation:['R'],realMoveCount:1,realWinner:'x',realLanes:[1],hasSolution:true,_lastSolveTelemetry:{{}},root:{{querySelector:()=>input}}}};
+clear(state,true);
+if (state.lastScramble.length||state.lastSolution.length||state._manualGroups.length||state._customBaseNotation||state.scrambleMoveCount||state.hasSolution||input.value||error) throw new Error('history reset left stale state');
+let visual=[],rust=[],solved=true;
+const rebuild=function(self) {{{rebuild_match.group('body')}}};
+state={{n:4,lastScramble:[{{axis:0,layer:3,dir:1}},{{axis:1,layer:0,dir:-1}}],buildCube(n){{this.built=n;}},applyInstant(m){{visual.push([m.axis,m.layer,m.dir]);}},lab:{{set_size(n){{this.n=n;}},reset(){{rust=[];solved=true;}},apply_design_move(a,l,d){{rust.push([a,l,d]);solved=false;}},is_solved(){{return solved;}}}}}};
+if (!rebuild(state)||state.built!==4||JSON.stringify(visual)!==JSON.stringify(rust)||!state.scrambled) throw new Error('visible and Rust scramble histories diverged');
+const lockUntilSolverReady=function(inst) {{{gate_match.group('body')}}};
+const original={{solve(){{}},scramble(){{}},replay(){{}},setN(){{}}}};
+let elements=[{{disabled:false,setAttribute(){{}},removeAttribute(){{}}}}], inst={{...original,ui:{{status:{{textContent:''}}}},root:{{querySelectorAll(){{return elements;}}}}}};
+let gate=lockUntilSolverReady(inst);
+if (inst.solve===original.solve||!elements[0].disabled) throw new Error('boot did not fail closed');
+inst.solve(); if (!inst.ui.status.textContent.includes('Loading')) throw new Error('blocked action lacked loading status');
+gate.restoreMethods(); if (inst.solve!==original.solve) throw new Error('original methods were not restored for wiring');
+gate.lockMethods(); gate.enableControls(); if (inst.solve===original.solve||elements[0].disabled) throw new Error('boot gate controls/methods are inconsistent');
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
+def main() -> int:
+    html = INDEX.read_text(encoding="utf-8")
+    worker = WORKER.read_text(encoding="utf-8")
+    parser = AuditParser()
+    parser.feed(html)
+
+    require(ROOT_LICENSE.exists(), "the integrated RCube engine requires the GPL-3.0 project license")
+    require(not WASM_LICENSE.exists(), "generated WASM package must not contain a stale license file")
+    require(
+        "GNU GENERAL PUBLIC LICENSE" in ROOT_LICENSE.read_text(encoding="utf-8")
+        and ROOT_LICENSE.read_bytes() == RCUBE_LICENSE.read_bytes(),
+        "project license must match the integrated RCube GPL-3.0 license",
+    )
+    cargo_manifests = [
+        ROOT / "Cargo.toml",
+        ROOT / "src-tauri" / "Cargo.toml",
+        *sorted((ROOT / "crates").glob("*/Cargo.toml")),
+    ]
+    for manifest in cargo_manifests:
+        manifest_text = manifest.read_text(encoding="utf-8")
+        require(
+            re.search(r"^\s*license(?:\.workspace)?\s*=", manifest_text, re.MULTILINE) is None,
+            f"stale project license metadata in {manifest.relative_to(ROOT)}",
+        )
+    if WASM_PACKAGE.exists():
+        wasm_package = json.loads(WASM_PACKAGE.read_text(encoding="utf-8"))
+        require("license" not in wasm_package, "generated WASM package must not declare a stale project license")
+        require(not list(WASM_PACKAGE.parent.glob("LICENSE*")), "generated WASM package must not retain stale license files")
+    flatpak_manifest = FLATPAK_MANIFEST.read_text(encoding="utf-8")
+    flatpak_component = ET.parse(FLATPAK_METAINFO).getroot()
+    require(flatpak_component.findtext("id") == "io.github.adamnolle.cubesolver", "Flatpak app ID drifted")
+    require(flatpak_component.findtext("project_license") == "GPL-3.0-only", "Flatpak metadata must match the integrated RCube license")
+    require("runtime-version: '50'" in flatpak_manifest, "Flatpak must use the supported GNOME 50 runtime")
+    require("--share=network" not in flatpak_manifest and "filesystem=home" not in flatpak_manifest, "Flatpak permissions must stay local-only")
+    security = json.loads(TAURI_CONFIG.read_text(encoding="utf-8"))["app"]["security"]
+    require("'unsafe-inline'" in security["csp"].split("style-src", 1)[1].split(";", 1)[0], "inline-heavy authored UI requires style-src unsafe-inline")
+    require("style-src" in security.get("dangerousDisableAssetCspModification", []), "Tauri nonce injection must stay disabled for style-src or packaged inline styles are blocked")
+
+    require(parser.tag_counts.get("main") == 1, "generated page must have one <main>")
+    require(parser.tag_counts.get("header") == 1, "generated page must have one <header>")
+    require(not parser.external_resources, f"desktop UI must be offline-only: {parser.external_resources}")
+    require({"studio-tab", "swarm-tab", "studio-panel", "swarm-panel"} <= parser.ids, "tab IDs/panels missing")
+    require({"custom-algorithm", "custom-algorithm-help", "custom-algorithm-error"} <= parser.ids, "custom scramble controls missing")
+
+    tabs = [attrs for role, attrs in parser.roles if role == "tab"]
+    require(len(tabs) == 2, "Studio and Swarm must expose exactly two ARIA tabs")
+    for tab in tabs:
+        require(tab.get("aria-controls") in parser.ids, "tab aria-controls must target a real panel")
+    require(any(role == "status" and attrs.get("aria-live") == "polite" for role, attrs in parser.roles), "live status missing")
+    require(any(role == "progressbar" for role, _ in parser.roles), "solve progressbar semantics missing")
+
+    module_match = re.search(r'<script type="module">(?P<source>.*?)</script>', html, re.DOTALL)
+    require(module_match is not None, "generated module script missing")
+    module = module_match.group("source")
+    for marker in (
+        "colors:colors",
+        "reduction:'det'",
+        "_solveDispatch",
+        "jobId:self._solveJobId",
+        "self._worker !== w",
+        "core.invoke('solve_stickers'",
+        "invoke('cancel_solve'",
+        "requestToken:requestToken",
+        "Number(v) > SOLVE_MAX_N",
+        "data-reduction-elapsed aria-hidden",
+        "data-reduction-start",
+        "data-reduction-cancel",
+        "data-replay-moves",
+        "Cancel playback",
+        "display:none;width:100%;height:42px",
+        "Native reduction is active",
+        "Progress percentages are intentionally omitted",
+        "nativeCore() ? 11 : 5",
+        "parseCustomAlgorithm",
+        "applyCustomAlgorithm",
+        "applyInteractiveTurn",
+        "undoInteractiveTurn",
+        "configureSupportedSizes",
+        "clearScrambleHistory",
+        "rebuildFromScrambleHistory",
+        "lockUntilSolverReady",
+        "Math.floor(N/2)",
+        "rotatedIdx(idx, m)",
+        "positionForIdx(idx)",
+        "this.setSolvedPct(0)",
+        "if (inst.initSwarm) inst.initSwarm()",
+        "syncLabFromVisibleScramble(inst)",
+        "recoverNoWebGLBuild",
+        "useTextureBuildWithoutWebGL",
+        "origMountBuildCube",
+        "ensureAnimationLoop(inst)",
+        "scheduleSwarmReduction(inst)",
+        "_swarmAutoStartTimer",
+        "e.ctrlKey || e.metaKey || e.altKey",
+        "role=\"tab\"",
+    ):
+        # role="tab" lives in HTML rather than JavaScript.
+        haystack = html if marker.startswith("role=") else module
+        require(marker in haystack, f"frontend contract marker missing: {marker}")
+
+    require("Math.round(np.x / this.step)" not in module, "even-N cubies must never snap to the integer-origin lattice")
+    require("visualization-only" not in html.lower(), "visualization-only product mode must not return")
+    require("Playing visual demo" not in html, "unsearched visual solve must not return")
+    require('data-n="20"' not in html and 'max="1000"' not in html and "Math.pow(50000" not in html, "unsupported size controls must not return")
+    require("inst.scrambleDepth = 200;" in module, "default 3x3 scramble depth must provide a full-length scramble")
+    require("SOLVE_3X3_DEPTH = 200" in module, "3x3 scramble depth must support 200 turns")
+    check_size_scaled_scramble_depth(module)
+    check_lattice_rotation(module)
+    check_cubie_layer_index(module)
+    check_swarm_scheduler(module)
+    check_boot_recovery(module)
+    check_custom_scramble(module)
+    check_scramble_lifecycle_and_boot_gate(module)
+
+    require("d.moves" not in worker, "solver worker must not receive scramble moves")
+    require("lab.load_face_colors(d.colors)" in worker, "solver worker sticker-only boundary missing")
+    require("jobId: d.jobId" in worker, "solver worker stale-job correlation missing")
+    node_check(module, ".mjs")
+    node_check(worker, ".mjs")
+
+    print("frontend smoke passed: structure, accessibility, supported-size cap, custom scrambles, exact cubie lattice, Swarm startup, JS syntax, worker/native privacy")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except AssertionError as error:
+        print(f"frontend smoke failed: {error}", file=sys.stderr)
+        raise SystemExit(1)

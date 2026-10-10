@@ -1,0 +1,322 @@
+// Hide the console window on Windows release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use cube_core::{Axis, CubeSize, Move};
+use cube_wasm::NativeReductionControl;
+use std::ffi::{c_char, c_void, CStr};
+use std::sync::Mutex;
+use std::time::Instant;
+use tauri::State;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RcubeMove {
+    face: u8,
+    depth: u32,
+    turns: i32,
+}
+
+type CancellationCheck = unsafe extern "C" fn(*mut c_void) -> bool;
+
+extern "C" {
+    fn rcube_solve(
+        size: u32,
+        colors: *const u8,
+        color_count: usize,
+        is_cancelled: Option<CancellationCheck>,
+        cancellation_context: *mut c_void,
+        output_moves: *mut *mut RcubeMove,
+        output_count: *mut usize,
+        error: *mut c_char,
+        error_capacity: usize,
+    ) -> i32;
+    fn rcube_free_moves(moves: *mut RcubeMove);
+}
+
+unsafe extern "C" fn rcube_is_cancelled(context: *mut c_void) -> bool {
+    let Some(control) = (unsafe { context.cast::<NativeReductionControl>().as_ref() }) else {
+        return true;
+    };
+    !control.should_continue()
+}
+
+fn rcube_move_to_core(movement: RcubeMove, n: usize) -> Result<Move, String> {
+    let depth = usize::try_from(movement.depth)
+        .map_err(|_| "RCube returned an invalid move depth".to_string())?;
+    if depth >= n {
+        return Err("RCube returned a move outside the cube".to_string());
+    }
+
+    let (axis, layer, direction) = match movement.face {
+        0 => (Axis::Z, n - 1 - depth, 1),
+        1 => (Axis::X, n - 1 - depth, 1),
+        2 => (Axis::Z, depth, -1),
+        3 => (Axis::X, depth, -1),
+        4 => (Axis::Y, n - 1 - depth, -1),
+        5 => (Axis::Y, depth, 1),
+        _ => return Err("RCube returned an invalid face".to_string()),
+    };
+    let turns = movement
+        .turns
+        .checked_mul(direction)
+        .and_then(|turns| i8::try_from(turns).ok())
+        .ok_or_else(|| "RCube returned an invalid turn amount".to_string())?;
+
+    Ok(Move::new(axis, layer, layer, turns))
+}
+
+fn solve_with_rcube(
+    n: usize,
+    colors: &[u8],
+    control: &NativeReductionControl,
+) -> Result<String, String> {
+    if !(4..=11).contains(&n) || colors.len() != 6 * n * n {
+        return Err("invalid cube size or sticker buffer".to_string());
+    }
+
+    let mut replay = cube_wasm::CubeLab::new(n);
+    if !replay.load_face_colors(colors) {
+        return Err("invalid or incomplete sticker state".to_string());
+    }
+
+    let started = Instant::now();
+    let mut raw_moves = std::ptr::null_mut();
+    let mut raw_move_count = 0usize;
+    let mut error = [0 as c_char; 512];
+    let cancellation_context = (control as *const NativeReductionControl)
+        .cast_mut()
+        .cast::<c_void>();
+    let status = unsafe {
+        rcube_solve(
+            n as u32,
+            colors.as_ptr(),
+            colors.len(),
+            Some(rcube_is_cancelled),
+            cancellation_context,
+            &mut raw_moves,
+            &mut raw_move_count,
+            error.as_mut_ptr(),
+            error.len(),
+        )
+    };
+    if status != 0 {
+        let message = unsafe { CStr::from_ptr(error.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+        return Err(if message.is_empty() {
+            "RCube solve failed".to_string()
+        } else {
+            message
+        });
+    }
+
+    if raw_move_count > 0 && raw_moves.is_null() {
+        return Err("RCube returned an empty move buffer".to_string());
+    }
+    let engine_moves = if raw_move_count == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(raw_moves, raw_move_count) }.to_vec()
+    };
+    unsafe { rcube_free_moves(raw_moves) };
+
+    let size = CubeSize::new(n).map_err(|error| error.to_string())?;
+    let mut moves = Vec::new();
+    let mut notation = Vec::with_capacity(engine_moves.len());
+    for engine_move in engine_moves {
+        let movement = rcube_move_to_core(engine_move, n)?;
+        if movement.is_noop() {
+            continue;
+        }
+
+        notation.push(movement.notation(size));
+        let axis = match movement.axis {
+            Axis::X => 0,
+            Axis::Y => 1,
+            Axis::Z => 2,
+        };
+        let (quarter_turns, direction) = match movement.turns.rem_euclid(4) {
+            1 => (1, 1),
+            2 => (2, 1),
+            3 => (1, -1),
+            _ => (0, 1),
+        };
+        for _ in 0..quarter_turns {
+            replay.apply_design_move(axis, movement.layer_start, direction);
+            moves.push(serde_json::json!({
+                "axis": axis,
+                "layer": movement.layer_start,
+                "dir": direction
+            }));
+        }
+    }
+
+    if !replay.is_solved() {
+        return Err("RCube solution failed independent replay verification".to_string());
+    }
+
+    let move_count = notation.len();
+    Ok(serde_json::json!({
+        "found": true,
+        "winner": "rcube",
+        "moveCount": move_count,
+        "elapsedMs": started.elapsed().as_millis(),
+        "moves": moves,
+        "notation": notation,
+        "lanes": [{
+            "id": "rcube",
+            "pct": 100,
+            "moveCount": move_count,
+            "label": "RCube center and edge reduction",
+            "solved": true
+        }]
+    })
+    .to_string())
+}
+
+struct ActiveSolve {
+    request_token: String,
+    control: NativeReductionControl,
+}
+
+#[derive(Default)]
+struct SolveState {
+    active: Mutex<Option<ActiveSolve>>,
+}
+
+impl SolveState {
+    fn begin(&self, request_token: String, control: NativeReductionControl) -> Result<(), String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "native solver state is unavailable".to_string())?;
+        if let Some(previous) = active.replace(ActiveSolve {
+            request_token,
+            control,
+        }) {
+            previous.control.cancel();
+        }
+        Ok(())
+    }
+
+    /// Clear only the request that actually completed. A stale task must never
+    /// remove a newer request's cancellation handle after a page reload/remount.
+    fn finish(&self, request_token: &str) -> Result<(), String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "native solver state is unavailable".to_string())?;
+        if active
+            .as_ref()
+            .is_some_and(|solve| solve.request_token == request_token)
+        {
+            active.take();
+        }
+        Ok(())
+    }
+
+    fn cancel(&self, request_token: &str) -> Result<bool, String> {
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "native solver state is unavailable".to_string())?;
+        if active
+            .as_ref()
+            .is_some_and(|solve| solve.request_token == request_token)
+        {
+            if let Some(solve) = active.take() {
+                solve.control.cancel();
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Run RCube on a native blocking thread. Only visible sticker colours cross the
+/// frontend boundary; scramble history never reaches the solver.
+#[tauri::command(rename_all = "camelCase")]
+async fn solve_stickers(
+    state: State<'_, SolveState>,
+    request_token: String,
+    n: usize,
+    colors: Vec<u8>,
+) -> Result<String, String> {
+    if request_token.len() < 16 || request_token.len() > 128 {
+        return Err("invalid solve request token".to_string());
+    }
+    if !(4..=11).contains(&n) || colors.len() != 6 * n * n {
+        return Err("invalid cube size or sticker buffer".to_string());
+    }
+
+    let control = cube_wasm::native_reduction_control(n);
+    state.begin(request_token.clone(), control.clone())?;
+
+    let worker_control = control.clone();
+    let join_result =
+        tauri::async_runtime::spawn_blocking(move || solve_with_rcube(n, &colors, &worker_control))
+            .await;
+
+    // Cleanup is unconditional and token-aware, including task join failure.
+    state.finish(&request_token)?;
+    join_result.map_err(|error| format!("native solver task failed: {error}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn cancel_solve(state: State<'_, SolveState>, request_token: String) -> Result<bool, String> {
+    state.cancel(&request_token)
+}
+
+fn main() {
+    tauri::Builder::default()
+        .manage(SolveState::default())
+        .invoke_handler(tauri::generate_handler![solve_stickers, cancel_solve])
+        .run(tauri::generate_context!())
+        .expect("error while running Solvaus Hybrid");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rcube_solution_replays_to_solved() {
+        let n = 4;
+        let mut lab = cube_wasm::CubeLab::new(n);
+        assert!(lab.scramble(18, 0x5eed) > 0);
+        let colors = lab.face_colors(n);
+        let control = cube_wasm::native_reduction_control(n);
+        let result = solve_with_rcube(n, &colors, &control).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(result["winner"], "rcube");
+        assert_eq!(result["found"], true);
+        assert_eq!(
+            result["moveCount"].as_u64().unwrap() as usize,
+            result["notation"].as_array().unwrap().len()
+        );
+    }
+
+    #[test]
+    fn stale_completion_cannot_clear_or_cancel_new_request() {
+        let state = SolveState::default();
+        let old = cube_wasm::native_reduction_control(4);
+        let new = cube_wasm::native_reduction_control(4);
+        state
+            .begin("old-request-token-0001".to_string(), old.clone())
+            .unwrap();
+        state
+            .begin("new-request-token-0002".to_string(), new.clone())
+            .unwrap();
+        assert!(!old.should_continue(), "replacement must cancel old work");
+
+        state.finish("old-request-token-0001").unwrap();
+        assert!(
+            new.should_continue(),
+            "stale completion cleared new control"
+        );
+        assert!(!state.cancel("old-request-token-0001").unwrap());
+        assert!(state.cancel("new-request-token-0002").unwrap());
+        assert!(!new.should_continue());
+    }
+}
