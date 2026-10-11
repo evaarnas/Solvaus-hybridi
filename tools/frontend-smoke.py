@@ -192,22 +192,34 @@ for(let n=2;n<=21;n++) {{
 
 
 def check_texture_render_scaling(module: str) -> None:
-    """Ensure texture rendering uses full cube detail with a bounded redraw budget."""
+    """Ensure large cubes use a display sample and frequent bounded redraws."""
+    display_match = re.search(
+        r"const d = (?P<expression>Math\.min\(N, maxTextureSize, 512\));",
+        module,
+    )
     match = re.search(
         r"textureSnapshotCount\(\) \{(?P<body>.*?)\n  \}\n\n  advanceTexture",
         module,
         re.DOTALL,
     )
+    require(display_match is not None, "bounded texture display sample missing")
     require(match is not None, "large-cube texture redraw budget missing")
     script = f"""
 const snapshotCount=function() {{{match.group('body')}}};
-const expected=new Map([[48,120],[128,16],[512,4],[1001,4]]);
+const expected=new Map([[48,120],[128,24],[512,24]]);
 let previous=Infinity;
 for(const [n,count] of expected) {{
   const actual=snapshotCount.call({{texFaces:[{{d:n}}]}});
   if(actual!==count || actual>previous)
     throw new Error(`wrong texture redraw budget for ${{n}}x${{n}}: ${{actual}}`);
   previous=actual;
+}}
+const displayDimension=function(N,maxTextureSize) {{
+  return {display_match.group('expression')};
+}};
+for(const [n,maxTextureSize,expectedDim] of [[48,4096,48],[512,4096,512],[1001,4096,512],[1001,256,256]]) {{
+  if(displayDimension(n,maxTextureSize)!==expectedDim)
+    throw new Error(`wrong display sample for ${{n}}x${{n}} at texture limit ${{maxTextureSize}}`);
 }}
 """
     subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
@@ -503,7 +515,7 @@ def main() -> int:
         "self.lab.reset();",
         "this._textureDrawBucket = drawBucket;",
         "Math.floor(frac * Math.min(this.totalMoves, this.textureSnapshotCount()))",
-        "const d = N;",
+        "const d = Math.min(N, maxTextureSize, 512);",
         "scr: new Uint8Array(d * d)",
         "const pixels = face.image.data, palette = face.palette;",
         "parseCustomAlgorithm",

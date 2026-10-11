@@ -7,7 +7,7 @@ The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired
 - **Standalone browser:** 2×2–21×21
 - **Tauri desktop:** 2×2–1001×1001
 
-Unsupported sizes are not exposed. Browser 9×9–21×21 reductions have a 570-second solver deadline and ten-minute UI watchdog; desktop solves have a five-minute watchdog and a 1001×1001 maximum. Cubes larger than 21×21 use the texture-based renderer, which tracks the full sticker grid and adapts redraw frequency for large faces. If a face exceeds the device's maximum texture resolution, its display is downsampled; solver state and replay verification still use every sticker. Solves can be cancelled, and successful results are independently replay-verified. Solve time and move count depend on the state and device.
+Unsupported sizes are not exposed. Browser 9×9–21×21 reductions have a 570-second solver deadline and ten-minute UI watchdog; desktop solves have a five-minute watchdog and a 1001×1001 maximum. Cubes larger than 21×21 use the texture-based renderer, which samples up to 512 stickers per face and adapts redraw frequency for large faces. The display is downsampled above that resolution; solver state and replay verification still use every sticker. Solves can be cancelled, and successful results are independently replay-verified. Solve time and move count depend on the state and device.
 
 ## Run in a browser
 

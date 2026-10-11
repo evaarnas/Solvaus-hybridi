@@ -613,10 +613,10 @@ class Component extends DCLogic {
   buildTextureCube(N) {
     const T = window.THREE;
     const total = 2.5;
-    const d = N;
     const maxTextureSize = this.renderer && this.renderer.capabilities
-      ? this.renderer.capabilities.maxTextureSize : 1024;
-    const S = Math.min(maxTextureSize, Math.max(512, 2 ** Math.ceil(Math.log2(d))));
+      ? this.renderer.capabilities.maxTextureSize : 512;
+    const d = Math.min(N, maxTextureSize, 512);
+    const S = Math.min(maxTextureSize, Math.max(128, 2 ** Math.ceil(Math.log2(d))));
     const solvedIdx = [5, 4, 0, 1, 2, 3]; // px,nx,py,ny,pz,nz -> r,o,w,y,g,b
     const palette = this.faceList.map(color => [
       parseInt(color.slice(1, 3), 16),
@@ -707,7 +707,7 @@ class Component extends DCLogic {
 
   textureSnapshotCount() {
     const d = this.texFaces[0].d;
-    return Math.max(4, Math.floor(120 * 48 * 48 / (d * d)));
+    return Math.max(24, Math.min(120, Math.floor(120 * 48 * 48 / (d * d))));
   }
 
   advanceTexture(dt) {
