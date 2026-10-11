@@ -197,12 +197,18 @@ def check_texture_render_scaling(module: str) -> None:
         r"const d = (?P<expression>Math\.min\(N, maxTextureSize, 512\));",
         module,
     )
+    texture_size_match = re.search(
+        r"const maxFaceSize = d <= 128 \? 2048 : 1024;\s*"
+        r"const S = (?P<expression>[^;]+);",
+        module,
+    )
     match = re.search(
         r"textureSnapshotCount\(\) \{(?P<body>.*?)\n  \}\n\n  advanceTexture",
         module,
         re.DOTALL,
     )
     require(display_match is not None, "bounded texture display sample missing")
+    require(texture_size_match is not None, "high-resolution sticker texture sizing missing")
     require(match is not None, "large-cube texture redraw budget missing")
     script = f"""
 const snapshotCount=function() {{{match.group('body')}}};
@@ -217,6 +223,15 @@ for(const [n,count] of expected) {{
 const displayDimension=function(N,maxTextureSize) {{
   return {display_match.group('expression')};
 }};
+const textureSize=function(d,maxTextureSize) {{
+  const texelsPerSticker=d<=128?10:4;
+  const maxFaceSize=d<=128?2048:1024;
+  return {texture_size_match.group('expression')};
+}};
+for(const [d,maxTextureSize,expectedSize] of [[101,4096,1024],[48,4096,512],[512,4096,1024],[101,256,256]]) {{
+  if(textureSize(d,maxTextureSize)!==expectedSize)
+    throw new Error(`wrong sticker texture size for ${{d}}x${{d}}: ${{textureSize(d,maxTextureSize)}}`);
+}}
 for(const [n,maxTextureSize,expectedDim] of [[48,4096,48],[512,4096,512],[1001,4096,512],[1001,256,256]]) {{
   if(displayDimension(n,maxTextureSize)!==expectedDim)
     throw new Error(`wrong display sample for ${{n}}x${{n}} at texture limit ${{maxTextureSize}}`);
