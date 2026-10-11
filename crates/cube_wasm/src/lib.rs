@@ -51,6 +51,13 @@ fn with_kociemba<R>(f: impl FnOnce(&cube_solver::kociemba::search::Solver) -> R)
     KOCIEMBA.with(|c| f(c.get_or_init(cube_solver::kociemba::search::Solver::new)))
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(inline_js = "export function post_solve_progress(percent) { self.postMessage({ type: 'progress', percent: percent }); }")]
+extern "C" {
+    /// Streams the stage-based estimate to the main thread from inside the worker.
+    fn post_solve_progress(percent: f64);
+}
+
 /// Build the 3×3 two-phase tables ahead of the first solve. The worker calls this
 /// once at startup so the first real Solve isn't slowed by the ~one-time table build.
 #[wasm_bindgen]
@@ -330,6 +337,14 @@ impl CubeLab {
         let control = cube_solver::reduction::ReductionControl::with_timeout(
             wasm_reduction_time_limit(self.n),
         );
+        #[cfg(target_arch = "wasm32")]
+        {
+            return cube_solver::reduction::with_progress_observer(
+                |percent| post_solve_progress(percent),
+                || self.try_reduction_with_control(&control),
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         self.try_reduction_with_control(&control)
     }
 

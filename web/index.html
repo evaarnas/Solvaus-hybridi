@@ -627,14 +627,7 @@ class Component extends DCLogic {
     const maxTextureSize = this.renderer && this.renderer.capabilities
       ? this.renderer.capabilities.maxTextureSize : 512;
     const d = Math.min(N, maxTextureSize, 512);
-    // Give each sticker several texels so grid lines and rounded corners stay crisp;
-    // very large faces use the per-pixel path, so their size is capped.
-    const texelsPerSticker = d <= 128 ? 10 : 4;
-    const maxFaceSize = d <= 128 ? 2048 : 1024;
-    const S = Math.min(maxTextureSize, maxFaceSize,
-      Math.max(128, 2 ** Math.ceil(Math.log2(d * texelsPerSticker))));
-    const maxAniso = this.renderer && this.renderer.capabilities
-      ? this.renderer.capabilities.getMaxAnisotropy() : 4;
+    const S = Math.min(maxTextureSize, Math.max(128, 2 ** Math.ceil(Math.log2(d))));
     const solvedIdx = [5, 4, 0, 1, 2, 3]; // px,nx,py,ny,pz,nz -> r,o,w,y,g,b
     const palette = this.faceList.map(color => [
       parseInt(color.slice(1, 3), 16),
@@ -648,13 +641,10 @@ class Component extends DCLogic {
       const cv = document.createElement('canvas'); cv.width = cv.height = S;
       const ctx = cv.getContext('2d');
       const tex = new T.CanvasTexture(cv);
-      tex.anisotropy = Math.min(16, maxAniso);
-      tex.generateMipmaps = true;
-      tex.minFilter = T.LinearMipmapLinearFilter;
-      tex.magFilter = T.LinearFilter;
+      tex.anisotropy = 4;
       const face = {
         cv, ctx, tex, d, S, palette,
-        image: d > 128 ? ctx.createImageData(S, S) : null,
+        image: ctx.createImageData(S, S),
         solvedColor: solvedIdx[f], scr: new Uint8Array(d * d),
       };
       for (let i = 0; i < d * d; i++) face.scr[i] = Math.floor(Math.random() * this.faceList.length);
@@ -1782,8 +1772,9 @@ class Component extends DCLogic {
       self._solveElapsedMs = elapsed;
       var engine = self._solveDispatch === 'native' ? 'Native RCube engine' :
                    self._solveDispatch === 'worker' ? 'WASM solver' : 'Solver';
-      var estimatedProgress = self._solveDispatch === 'native' &&
+      var estimatedProgress = (self._solveDispatch === 'native' || self._solveDispatch === 'worker') &&
         Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null;
+      var estimateName = self._solveDispatch === 'native' ? 'RCube' : 'WASM reduction';
       var statusKey = engine+':'+self.n+':'+(estimatedProgress === null ? 'active' : estimatedProgress);
       if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
         self._solveStatusKey = statusKey;
@@ -1808,8 +1799,8 @@ class Component extends DCLogic {
           if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
         } else {
           lane.setAttribute('aria-valuenow', String(estimatedProgress));
-          lane.setAttribute('aria-valuetext', 'RCube estimated solve progress ' + estimatedProgress + '%');
-          if (stat) stat.textContent = 'RCube estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          lane.setAttribute('aria-valuetext', estimateName + ' estimated solve progress ' + estimatedProgress + '%');
+          if (stat) stat.textContent = estimateName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
           if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
         }
@@ -1822,13 +1813,13 @@ class Component extends DCLogic {
           progress.style.width='28%'; progress.style.transform='translateX('+travel+'%)'; progress.style.transition='transform .5s linear';
         } else {
           progress.setAttribute('aria-valuenow', String(estimatedProgress));
-          progress.setAttribute('aria-valuetext', 'RCube estimated solve progress ' + estimatedProgress + '%');
+          progress.setAttribute('aria-valuetext', estimateName + ' estimated solve progress ' + estimatedProgress + '%');
           progress.style.width=estimatedProgress+'%'; progress.style.transform='none'; progress.style.transition='width .25s linear';
         }
       }
     }
     function updateNativeSolveProgress(self, requestToken, payload){
-      if (!self._solvePending || self._solveDispatch !== 'native' ||
+      if (!self._solvePending || (self._solveDispatch !== 'native' && self._solveDispatch !== 'worker') ||
           self._solveRequestToken !== requestToken || !payload ||
           !Number.isFinite(payload.percent)) return;
       self._nativeSolveProgress = Math.max(0, Math.min(100, Math.round(payload.percent)));
@@ -2006,6 +1997,7 @@ class Component extends DCLogic {
             return;
           }
           if (d.type === 'error'){ handleWorkerFailure(self); return; }
+          if (d.type === 'progress'){ updateNativeSolveProgress(self, self._solveRequestToken, d); return; }
           if (d.type === 'result'){ onSolveResult(self, d); }
         };
         w.onerror = function(){ if (self._worker === w) handleWorkerFailure(self); };
@@ -2289,7 +2281,7 @@ class Component extends DCLogic {
         } else {
           if (note) note.innerHTML = nativeCore()
             ? 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop RCube reports its stage-based estimated solve progress; the percentage is an estimate, not a measure of remaining time.'
-            : 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Browser reduction reports elapsed activity and replay proof without inventing a search percentage.';
+            : 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Browser reduction reports its stage-based estimated solve progress (centers → edges → 3×3 finish) and replay proof; the percentage is an estimate, not a measure of remaining time.';
           if (liveEl && liveEl.textContent !== 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3') liveEl.textContent = 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3';
         }
         if (msg){
@@ -2314,9 +2306,9 @@ class Component extends DCLogic {
               msg.innerHTML = '<div style="display:flex;align-items:center;gap:9px;color:#1573E6;"><span style="width:10px;height:10px;border-radius:50%;background:#1573E6;box-shadow:0 0 0 5px rgba(21,115,230,.12);"></span><b>'+
                 (nativeSolving ? 'Native reduction is active (RCube engine)' : 'WASM solver is active') +
                 '</b></div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:12px;">'+n+'×'+n+' · <span data-reduction-elapsed aria-hidden="true">0s</span>' +
-                (nativeSolving ? ' · <span data-native-solve-progress>0%</span>' : '') + '</div>' + pipeline +
+                ' · <span data-native-solve-progress>0%</span>' + '</div>' + pipeline +
                 '<div style="font-size:12px;color:#6F756A;">Working from '+(6*n*n).toLocaleString()+' visible sticker colours. '+
-                (nativeSolving ? 'RCube percentage is its stage-based estimate; it does not predict remaining time.' : 'Browser solve progress is reported as elapsed activity until a verified solution is returned.')+'</div>'+
+                (nativeSolving ? 'RCube percentage is its stage-based estimate; it does not predict remaining time.' : 'The percentage is a stage-based estimate (centers → edges → 3×3 finish); it does not predict remaining time.')+'</div>'+
                 '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel solve</button>';
             } else if (replaying){
               msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ '+(nativeRcube?'RCube reports solved — replaying':'Verified solution is replaying')+'</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +

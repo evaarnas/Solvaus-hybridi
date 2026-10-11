@@ -417,10 +417,12 @@ fn solve_reduction_core(cube: &mut StickerCube, solver: &Solver) -> Option<Vec<M
     let dbg = std::env::var("RDBG").is_ok();
     let n = cube.size().get();
     let mut moves = Vec::new();
+    super::report_progress(0.0);
     moves.extend(solve_centers(cube));
     if !super::reduction_checkpoint() {
         return None;
     }
+    super::report_progress(50.0);
     let center_base = cube.clone();
     let center_moves = moves.clone();
     let home = home_targets(n);
@@ -436,6 +438,7 @@ fn solve_reduction_core(cube: &mut StickerCube, solver: &Solver) -> Option<Vec<M
         let outcome = solve_edges_with_stall(cube);
         moves.extend(outcome.moves);
         stalled_slot = outcome.stalled_slot;
+        super::report_progress(85.0);
     } else if dbg {
         eprintln!("[red] centres stalled on first pass; relying on disturbance recovery");
     }
@@ -448,6 +451,7 @@ fn solve_reduction_core(cube: &mut StickerCube, solver: &Solver) -> Option<Vec<M
         if !at_target(cube, &home) {
             return false;
         }
+        super::report_progress(92.0);
         if let Some(fin) = finish_3x3(cube, solver) {
             extra.extend(fin);
             return true;

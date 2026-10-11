@@ -120,6 +120,34 @@ pub(crate) fn reduction_checkpoint() -> bool {
     })
 }
 
+type ProgressObserver = Box<dyn FnMut(f64)>;
+
+thread_local! {
+    static PROGRESS: RefCell<Option<(ProgressObserver, f64)>> = const { RefCell::new(None) };
+}
+
+/// Stage-based (not time-based) estimate in 0..=100. Reports are monotonic so the
+/// parity-recovery fallbacks that re-run stages never move the bar backwards.
+pub(crate) fn report_progress(percent: f64) {
+    PROGRESS.with(|slot| {
+        if let Some((observer, last)) = slot.borrow_mut().as_mut() {
+            let percent = percent.clamp(0.0, 100.0);
+            if percent > *last {
+                *last = percent;
+                observer(percent);
+            }
+        }
+    });
+}
+
+/// Run `run` with a progress observer installed for the current thread.
+pub fn with_progress_observer<T>(observer: impl FnMut(f64) + 'static, run: impl FnOnce() -> T) -> T {
+    PROGRESS.with(|slot| slot.replace(Some((Box::new(observer), -1.0))));
+    let result = run();
+    PROGRESS.with(|slot| slot.replace(None));
+    result
+}
+
 struct ControlGuard(Option<ReductionControl>);
 
 impl Drop for ControlGuard {
