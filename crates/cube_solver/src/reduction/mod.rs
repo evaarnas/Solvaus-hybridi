@@ -112,6 +112,7 @@ thread_local! {
 }
 
 pub(crate) fn reduction_checkpoint() -> bool {
+    tick_progress_band();
     ACTIVE_CONTROL.with(|active| {
         active
             .borrow()
@@ -124,18 +125,40 @@ type ProgressObserver = Box<dyn FnMut(f64)>;
 
 thread_local! {
     static PROGRESS: RefCell<Option<(ProgressObserver, f64)>> = const { RefCell::new(None) };
+    static BAND: std::cell::Cell<Option<(f64, f64, f64)>> = const { std::cell::Cell::new(None) };
 }
 
-/// Stage-based (not time-based) estimate in 0..=100. Reports are monotonic so the
-/// parity-recovery fallbacks that re-run stages never move the bar backwards.
+/// Stage-based (not time-based) estimate in 0..=100. Reports are monotonic and
+/// whole-percent so the parity-recovery fallbacks never move the bar backwards.
 pub(crate) fn report_progress(percent: f64) {
     PROGRESS.with(|slot| {
         if let Some((observer, last)) = slot.borrow_mut().as_mut() {
-            let percent = percent.clamp(0.0, 100.0);
+            let percent = percent.clamp(0.0, 100.0).floor();
             if percent > *last {
                 *last = percent;
                 observer(percent);
             }
+        }
+    });
+}
+
+/// Run an opaque stage of unknown length (e.g. a move-library build) whose
+/// existing cancellation checkpoints advance the bar asymptotically from `lo`
+/// toward `hi`; the caller reports `hi` once the stage really finishes.
+pub(crate) fn with_progress_band<T>(lo: f64, hi: f64, run: impl FnOnce() -> T) -> T {
+    let previous = BAND.with(|band| band.replace(Some((lo, hi, 0.0))));
+    let result = run();
+    BAND.with(|band| band.set(previous));
+    report_progress(hi);
+    result
+}
+
+fn tick_progress_band() {
+    BAND.with(|band| {
+        if let Some((lo, hi, ticks)) = band.get() {
+            let ticks = ticks + 1.0;
+            band.set(Some((lo, hi, ticks)));
+            report_progress(lo + (hi - lo) * (1.0 - 1.0 / (1.0 + ticks / 400.0)));
         }
     });
 }

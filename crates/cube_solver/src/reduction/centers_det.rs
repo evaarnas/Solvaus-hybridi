@@ -1192,7 +1192,7 @@ pub fn solve_centers(cube: &mut StickerCube) -> Vec<Move> {
     moves.extend(orient_fixed_centers(cube));
 
     let library_started = Instant::now();
-    let lib = library(n);
+    let lib = super::with_progress_band(0.0, 8.0, || library(n));
     let library_elapsed = library_started.elapsed();
     let dbg = std::env::var("RDBG").is_ok();
     if dbg {
@@ -1274,6 +1274,9 @@ pub fn solve_centers(cube: &mut StickerCube) -> Vec<Move> {
                 return moves;
             }
             let cc = correct_count(cube, &w_cells, want);
+            super::report_progress(
+                8.0 + 42.0 * (fi as f64 + cc as f64 / w_cells.len().max(1) as f64) / order.len() as f64,
+            );
             if cc == w_cells.len() {
                 if dbg {
                     eprintln!(

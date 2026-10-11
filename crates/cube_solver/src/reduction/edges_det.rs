@@ -863,7 +863,7 @@ pub(crate) fn solve_orbit_to_pairs(
 }
 
 fn solve_to_target_outcome(cube: &mut StickerCube, target: &[(Color, Color)]) -> EdgeSolveOutcome {
-    let lib = library(cube.size().get());
+    let lib = super::with_progress_band(50.0, 60.0, || library(cube.size().get()));
     solve_to_target_outcome_with_library(cube, target, lib)
 }
 
@@ -896,6 +896,9 @@ fn solve_to_target_outcome_with_library(
     let correct = |cube: &StickerCube, i: usize| pair(cube, i) == home[i];
 
     while let Some(t) = (0..slots).find(|&i| !correct(cube, i)) {
+        super::report_progress(
+            60.0 + 25.0 * (0..slots).filter(|&i| correct(cube, i)).count() as f64 / slots as f64,
+        );
         if !super::reduction_checkpoint() {
             return EdgeSolveOutcome {
                 moves,
