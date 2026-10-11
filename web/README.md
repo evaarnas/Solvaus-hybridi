@@ -1,6 +1,6 @@
 # Cube Solver web interface
 
-The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired to the real Rust solver by `tools/gen-index.py`. Mostly based on [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle and on the bundled RCube engine (`src-tauri/rcube`).
+The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired to the real Rust solver by `tools/gen-index.py`. Mostly based on [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle and on [RCube](https://github.com/ShellPuppy/RCube), bundled as `src-tauri/rcube`.
 
 ## Supported sizes
 
