@@ -125,7 +125,7 @@ type ProgressObserver = Box<dyn FnMut(f64)>;
 
 thread_local! {
     static PROGRESS: RefCell<Option<(ProgressObserver, f64)>> = const { RefCell::new(None) };
-    static BAND: std::cell::Cell<Option<(f64, f64, f64)>> = const { std::cell::Cell::new(None) };
+    static BAND: std::cell::Cell<Option<(f64, f64, f64, f64)>> = const { std::cell::Cell::new(None) };
 }
 
 /// Stage-based (not time-based) estimate in 0..=100. Reports are monotonic and
@@ -146,19 +146,26 @@ pub(crate) fn report_progress(percent: f64) {
 /// existing cancellation checkpoints advance the bar asymptotically from `lo`
 /// toward `hi`; the caller reports `hi` once the stage really finishes.
 pub(crate) fn with_progress_band<T>(lo: f64, hi: f64, run: impl FnOnce() -> T) -> T {
-    let previous = BAND.with(|band| band.replace(Some((lo, hi, 0.0))));
+    let previous = BAND.with(|band| band.replace(Some((lo, hi, 0.0, 400.0))));
     let result = run();
     BAND.with(|band| band.set(previous));
     report_progress(hi);
     result
 }
 
+/// Open-ended band for a stage with no natural end point (parity recovery): the
+/// bar creeps from `lo` toward `hi` and never reaches it. `scale` is the number
+/// of checkpoints at which half of the range has been covered.
+pub(crate) fn start_progress_band(lo: f64, hi: f64, scale: f64) {
+    BAND.with(|band| band.set(Some((lo, hi, 0.0, scale))));
+}
+
 fn tick_progress_band() {
     BAND.with(|band| {
-        if let Some((lo, hi, ticks)) = band.get() {
+        if let Some((lo, hi, ticks, scale)) = band.get() {
             let ticks = ticks + 1.0;
-            band.set(Some((lo, hi, ticks)));
-            report_progress(lo + (hi - lo) * (1.0 - 1.0 / (1.0 + ticks / 400.0)));
+            band.set(Some((lo, hi, ticks, scale)));
+            report_progress(lo + (hi - lo) * (1.0 - 1.0 / (1.0 + ticks / scale)));
         }
     });
 }
@@ -166,7 +173,9 @@ fn tick_progress_band() {
 /// Run `run` with a progress observer installed for the current thread.
 pub fn with_progress_observer<T>(observer: impl FnMut(f64) + 'static, run: impl FnOnce() -> T) -> T {
     PROGRESS.with(|slot| slot.replace(Some((Box::new(observer), -1.0))));
+    BAND.with(|band| band.set(None));
     let result = run();
+    BAND.with(|band| band.set(None));
     PROGRESS.with(|slot| slot.replace(None));
     result
 }
