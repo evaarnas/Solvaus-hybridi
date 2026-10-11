@@ -482,7 +482,7 @@ fn solve_reduction_core(cube: &mut StickerCube, solver: &Solver) -> Option<Vec<M
     }
 
     // Parity recovery has no measurable length; creep from 85% toward (never reaching) 99%.
-    super::start_progress_band(85.0, 99.0, 3000.0);
+    super::start_progress_band(85.0, 99.0, 3000.0 * n as f64);
 
     // Polynomial sticker-only orbit normalization. Unlike the legacy path below,
     // this never treats a first stalled slot as parity: each orbit must reach the
