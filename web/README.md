@@ -1,6 +1,6 @@
 # Cube Solver web interface
 
-The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired to the real Rust solver by `tools/gen-index.py`.
+The polished Studio/Swarm UI, generated from `tools/design-source.txt` and wired to the real Rust solver by `tools/gen-index.py`. Mostly based on [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle.
 
 ## Supported sizes
 
