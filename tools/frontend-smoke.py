@@ -191,6 +191,28 @@ for(let n=2;n<=21;n++) {{
     subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
 
 
+def check_texture_render_scaling(module: str) -> None:
+    """Ensure texture rendering uses full cube detail with a bounded redraw budget."""
+    match = re.search(
+        r"textureSnapshotCount\(\) \{(?P<body>.*?)\n  \}\n\n  advanceTexture",
+        module,
+        re.DOTALL,
+    )
+    require(match is not None, "large-cube texture redraw budget missing")
+    script = f"""
+const snapshotCount=function() {{{match.group('body')}}};
+const expected=new Map([[48,120],[128,16],[512,4],[1001,4]]);
+let previous=Infinity;
+for(const [n,count] of expected) {{
+  const actual=snapshotCount.call({{texFaces:[{{d:n}}]}});
+  if(actual!==count || actual>previous)
+    throw new Error(`wrong texture redraw budget for ${{n}}x${{n}}: ${{actual}}`);
+  previous=actual;
+}}
+"""
+    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
+
+
 def check_swarm_scheduler(module: str) -> None:
     """Exercise the generated early-mount/idle Swarm scheduling state machine."""
     match = re.search(
@@ -457,7 +479,7 @@ def main() -> int:
         "updateNativeSolveProgress",
         "RCube estimated solve progress",
         "RCube estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed)",
-        "var SOLVE_MAX_N = nativeCore() ? 255 : 21",
+        "var SOLVE_MAX_N = nativeCore() ? 1001 : 21",
         "function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= SOLVE_MAX_N; }",
         "core.invoke('scramble_rcube'",
         "Scrambled with RCube — ready to solve",
@@ -480,8 +502,10 @@ def main() -> int:
         "this.renderTextureFromLab();",
         "self.lab.reset();",
         "this._textureDrawBucket = drawBucket;",
-        "Math.floor(frac * Math.min(this.totalMoves, 120))",
-        "const d = Math.min(N, 48);",
+        "Math.floor(frac * Math.min(this.totalMoves, this.textureSnapshotCount()))",
+        "const d = N;",
+        "scr: new Uint8Array(d * d)",
+        "const pixels = face.image.data, palette = face.palette;",
         "parseCustomAlgorithm",
         "applyCustomAlgorithm",
         "applyInteractiveTurn",
@@ -517,6 +541,7 @@ def main() -> int:
     require("inst.scrambleDepth = 200;" in module, "default 3x3 scramble depth must provide a full-length scramble")
     require("SOLVE_3X3_DEPTH = 200" in module, "3x3 scramble depth must support 200 turns")
     check_size_scaled_scramble_depth(module)
+    check_texture_render_scaling(module)
     check_lattice_rotation(module)
     check_cubie_layer_index(module)
     check_swarm_scheduler(module)

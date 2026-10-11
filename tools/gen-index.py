@@ -1119,8 +1119,8 @@ WIRE = r'''
     // SOLVE_MAX_DEPTH bounds the exact 2x2 search. Kociemba handles arbitrary 3x3
     // scrambles; larger cubes scale to 20 turns per layer, matching the tested
     // deterministic-reduction scramble range.
-    // Native RCube supports cubes through 255x255; browser WASM through 21x21.
-    var SOLVE_MAX_N = nativeCore() ? 255 : 21, SOLVE_MAX_DEPTH = 9,
+    // Native RCube supports cubes through 1001x1001; browser WASM through 21x21.
+    var SOLVE_MAX_N = nativeCore() ? 1001 : 21, SOLVE_MAX_DEPTH = 9,
         SOLVE_3X3_DEPTH = 200, SCRAMBLE_TURNS_PER_LAYER = 20;
     function scrambleDepthLimit(n){
       return n === 2 ? SOLVE_MAX_DEPTH : n === 3 ? SOLVE_3X3_DEPTH : n * SCRAMBLE_TURNS_PER_LAYER;

@@ -9,7 +9,7 @@ use std::time::Instant;
 use tauri::{ipc::Channel, State};
 
 const TEXTURE_RENDER_THRESHOLD: usize = 21;
-const MAX_NATIVE_CUBE_SIZE: usize = 255;
+const MAX_NATIVE_CUBE_SIZE: usize = 1001;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
