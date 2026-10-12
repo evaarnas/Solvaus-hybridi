@@ -743,6 +743,27 @@ class Component extends DCLogic {
     return Math.max(24, Math.min(120, Math.floor(120 * 48 * 48 / (d * d))));
   }
 
+  // Huge native solves arrive as a packed Uint32Array (layer | axis<<16 | (turns+2)<<18)
+  // so millions of moves never become individual JS objects.
+  textureReplayMoveAt(i) {
+    const list = this._textureReplayMoves;
+    if (Array.isArray(list)) return list[i];
+    if (i >= list.length) return undefined;
+    const v = list[i];
+    return { axis: (v >> 16) & 3, layer: v & 0xFFFF, turns: ((v >> 18) & 7) - 2 };
+  }
+
+  textureReplayTurnTotal() {
+    const list = this._textureReplayMoves;
+    let total = 0;
+    for (let i = 0, len = list.length; i < len; i++) {
+      const turns = Array.isArray(list) ? list[i].turns : ((list[i] >> 18) & 7) - 2;
+      const amount = ((turns % 4) + 4) % 4;
+      total += amount === 2 ? 2 : amount === 0 ? 0 : 1;
+    }
+    return total;
+  }
+
   advanceTexture(dt) {
     const speedK = 0.52 / this.speedDur;
     const dur = (this.phase === 'scrambling' ? 1.3 : 2.8) / speedK;
@@ -754,7 +775,7 @@ class Component extends DCLogic {
       const started = performance.now();
       const initialMovesDone = this.movesDone;
       while (this.movesDone < target && performance.now() - started < 5) {
-        const move = this._textureReplayMoves[this._textureReplayIndex];
+        const move = this.textureReplayMoveAt(this._textureReplayIndex);
         if (!move) break;
         if (!this._textureReplayTurnsLeft) {
           const amount = ((move.turns % 4) + 4) % 4;
@@ -823,10 +844,7 @@ class Component extends DCLogic {
   solveTexture() {
     this.phase = 'solving'; this.busy = true; this.texProg = 0; this._textureDrawBucket = -1;
     this.totalMoves = this._textureReplayMoves
-      ? this._textureReplayMoves.reduce((total, move) => {
-          const amount = ((move.turns % 4) + 4) % 4;
-          return total + (amount === 2 ? 2 : amount === 0 ? 0 : 1);
-        }, 0)
+      ? this.textureReplayTurnTotal()
       : Number(this.realMoveCount) || Math.round(0.35 * this.N * this.N);
     this.movesDone = 0;
     this._textureReplayIndex = 0; this._textureReplayTurnsLeft = 0;
@@ -1468,9 +1486,9 @@ class Component extends DCLogic {
       if (this.mode==='texture'){
         this.scrambled=true;
         if (this.realWinner==='rcube'&&this.lastSolution&&this.lastSolution.length){
-          this._textureReplayMoves=this.lastSolution.map(function(m){
+          this._textureReplayMoves=Array.isArray(this.lastSolution)?this.lastSolution.map(function(m){
             return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
-          });
+          }):this.lastSolution;
         }
         this.solveTexture();
         if(this.ui&&this.ui.status)this.ui.status.textContent='Replaying verified solution';
@@ -1869,6 +1887,23 @@ class Component extends DCLogic {
       var progress=self.root.querySelector('[data-progress]');
       if (progress){ progress.removeAttribute('aria-valuetext'); progress.style.transform='none'; progress.style.transition='width .12s linear'; progress.style.width='0%'; progress.setAttribute('aria-valuenow','0'); }
     }
+    // The native solver returns raw bytes: tag 0 = UTF-8 JSON, tag 1 = packed
+    // large-cube result (u32 moveCount, u32 packedCount, then packed u32 moves).
+    // onSolveResult expects a JSON string or an already-built result object.
+    function decodeNativeSolveResult(raw){
+      var bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : (ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : null);
+      if (!bytes) return raw;
+      if (bytes[0] === 0) return new TextDecoder().decode(bytes.subarray(1));
+      var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      var moveCount = view.getUint32(1, true), packedCount = view.getUint32(5, true);
+      var packed = new Uint32Array(packedCount);
+      new Uint8Array(packed.buffer).set(bytes.subarray(9, 9 + packedCount * 4));
+      return {
+        found:true, solvedByRcube:true, compactMoves:true, winner:'rcube', moveCount:moveCount,
+        moves:packed, notation:[],
+        lanes:[{id:'rcube',pct:100,moveCount:moveCount,label:'RCube center and edge reduction',solved:true}]
+      };
+    }
     function postNativeSolve(self){
       var core = nativeCore();
       if (!core || !self._solvePending || self._solveDispatch) return false;
@@ -1892,7 +1927,7 @@ class Component extends DCLogic {
       core.invoke('solve_stickers', {
         requestToken:requestToken, n:self.n, colors:colors, onProgress:progressChannel
       }).then(function(result){
-        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:result });
+        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:decodeNativeSolveResult(result) });
       }).catch(function(error){
         onSolveResult(self, { type:'result', jobId:jobId, ok:false, error:String(error) });
       });
@@ -2068,8 +2103,11 @@ class Component extends DCLogic {
       self._solveDispatch = null;
       showCancel(self, false);
       var res = null;
-      if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
-      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&self.mode==='texture');
+      if (data && data.ok){
+        if (typeof data.result === 'string'){ try { res = JSON.parse(data.result); } catch(e){} }
+        else res = data.result;
+      }
+      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture');
       if (!res || !res.found || !res.moves || !res.moves.length){
         self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
@@ -2102,10 +2140,11 @@ class Component extends DCLogic {
         var texN=self.n, totalTurns=0, validTexturePath=true;
         if (compactNativeTextureResult){
           textureReplayMoves = res.moves;
-          for (var ti=0, tl=res.moves.length; ti<tl; ti++){
-            var tm=res.moves[ti], tt=tm.turns;
-            if (!(tm.axis>=0&&tm.axis<=2&&tm.layer>=0&&tm.layer<texN&&(tt===1||tt===-1||tt===2||tt===-2))){ validTexturePath=false; break; }
-            totalTurns+=(tt===2||tt===-2)?2:1;
+          var packedMoves = res.moves;
+          for (var ti=0, tl=packedMoves.length; ti<tl; ti++){
+            var pv=packedMoves[ti], tt=((pv>>18)&7)-2, pa=(pv>>16)&3, pl=pv&0xFFFF;
+            if (!(pa<=2&&pl<texN&&(tt===1||tt===-1||tt===2))){ validTexturePath=false; break; }
+            totalTurns+=tt===2?2:1;
           }
         } else {
           textureReplayMoves = res.moves.map(function(m){

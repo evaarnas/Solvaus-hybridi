@@ -4,7 +4,6 @@
 use cube_core::{Axis, CubeSize, Move};
 use cube_wasm::NativeReductionControl;
 use std::ffi::{c_char, c_void, CStr};
-use std::fmt::Write as _;
 use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{ipc::Channel, State};
@@ -97,7 +96,7 @@ fn solve_with_rcube(
     colors: &[u8],
     control: &NativeReductionControl,
     progress: Option<Box<dyn Fn(f64) + Send + Sync>>,
-) -> Result<String, String> {
+) -> Result<Vec<u8>, String> {
     if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
@@ -156,7 +155,8 @@ fn solve_with_rcube(
 
     let size = CubeSize::new(n).map_err(|error| error.to_string())?;
     let mut moves = Vec::new();
-    let mut compact_moves = String::new();
+    // Packed as layer | axis << 16 | (turns + 2) << 18.
+    let mut packed_moves: Vec<u32> = Vec::new();
     let mut notation = Vec::with_capacity(engine_moves.len());
     let mut move_count = 0usize;
     for engine_move in engine_moves {
@@ -190,40 +190,40 @@ fn solve_with_rcube(
             }
         }
         if n > TEXTURE_RENDER_THRESHOLD {
-            let compact_turns = match movement.turns.rem_euclid(4) {
-                1 => 1,
-                2 => 2,
-                3 => -1,
-                _ => 0,
+            let turns_code: u32 = match movement.turns.rem_euclid(4) {
+                1 => 3,
+                2 => 4,
+                _ => 1,
             };
-            if !compact_moves.is_empty() {
-                compact_moves.push(',');
-            }
-            let _ = write!(
-                compact_moves,
-                "{{\"axis\":{},\"layer\":{},\"turns\":{}}}",
-                axis, movement.layer_start, compact_turns
-            );
+            packed_moves.push(movement.layer_start as u32 | (axis as u32) << 16 | turns_code << 18);
         }
     }
 
-    // Large solves contain a huge move list; serializing it by hand avoids
-    // building millions of intermediate JSON values before the replay starts.
-    let moves_json = if n > TEXTURE_RENDER_THRESHOLD {
-        format!("[{compact_moves}]")
-    } else {
-        serde_json::Value::Array(moves).to_string()
-    };
+    // Large solves ship as raw bytes: serializing millions of moves as JSON and
+    // parsing them again in the webview dominated the wait after the solve.
+    if n > TEXTURE_RENDER_THRESHOLD {
+        let mut bytes = Vec::with_capacity(9 + packed_moves.len() * 4);
+        bytes.push(1u8);
+        bytes.extend_from_slice(&(move_count as u32).to_le_bytes());
+        bytes.extend_from_slice(&(packed_moves.len() as u32).to_le_bytes());
+        for packed in &packed_moves {
+            bytes.extend_from_slice(&packed.to_le_bytes());
+        }
+        return Ok(bytes);
+    }
     let notation_json = serde_json::to_string(&notation).map_err(|error| error.to_string())?;
-    Ok(format!(
-        "{{\"found\":true,\"solvedByRcube\":true,\"compactMoves\":{},\"winner\":\"rcube\",\"moveCount\":{},\"elapsedMs\":{},\"moves\":{},\"notation\":{},\"lanes\":[{{\"id\":\"rcube\",\"pct\":100,\"moveCount\":{},\"label\":\"RCube center and edge reduction\",\"solved\":true}}]}}",
-        n > TEXTURE_RENDER_THRESHOLD,
+    let json = format!(
+        "{{\"found\":true,\"solvedByRcube\":true,\"compactMoves\":false,\"winner\":\"rcube\",\"moveCount\":{},\"elapsedMs\":{},\"moves\":{},\"notation\":{},\"lanes\":[{{\"id\":\"rcube\",\"pct\":100,\"moveCount\":{},\"label\":\"RCube center and edge reduction\",\"solved\":true}}]}}",
         move_count,
         started.elapsed().as_millis(),
-        moves_json,
+        serde_json::Value::Array(moves),
         notation_json,
         move_count
-    ))
+    );
+    let mut bytes = Vec::with_capacity(json.len() + 1);
+    bytes.push(0u8);
+    bytes.extend_from_slice(json.as_bytes());
+    Ok(bytes)
 }
 
 fn scramble_with_rcube(n: usize, seed: i32) -> Result<String, String> {
@@ -366,7 +366,7 @@ async fn solve_stickers(
     request_token: String,
     n: usize,
     colors: Vec<u8>,
-) -> Result<String, String> {
+) -> Result<tauri::ipc::Response, String> {
     if request_token.len() < 16 || request_token.len() > 128 {
         return Err("invalid solve request token".to_string());
     }
@@ -394,7 +394,9 @@ async fn solve_stickers(
 
     // Cleanup is unconditional and token-aware, including task join failure.
     state.finish(&request_token)?;
-    join_result.map_err(|error| format!("native solver task failed: {error}"))?
+    join_result
+        .map_err(|error| format!("native solver task failed: {error}"))?
+        .map(tauri::ipc::Response::new)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -446,7 +448,7 @@ mod tests {
             })),
         )
         .unwrap();
-        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let result: serde_json::Value = serde_json::from_slice(&result[1..]).unwrap();
 
         assert_eq!(result["winner"], "rcube");
         assert_eq!(result["found"], true);
@@ -486,18 +488,20 @@ mod tests {
         let colors = source.face_colors(n);
         let control = cube_wasm::native_reduction_control(n);
         let result = solve_with_rcube(n, &colors, &control, None).unwrap();
-        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(result["solvedByRcube"], true);
-        assert_eq!(result["compactMoves"], true);
-        assert!(!result["moves"].as_array().unwrap().is_empty());
-        assert!(result["moveCount"].as_u64().unwrap() > 0);
+        assert_eq!(result[0], 1);
+        let move_count = u32::from_le_bytes(result[1..5].try_into().unwrap());
+        let packed_count = u32::from_le_bytes(result[5..9].try_into().unwrap()) as usize;
+        assert!(move_count > 0);
+        assert!(packed_count > 0);
+        assert_eq!(result.len(), 9 + packed_count * 4);
 
         let mut replay = cube_wasm::CubeLab::new(n);
         assert!(replay.load_face_colors(&colors));
-        for movement in result["moves"].as_array().unwrap() {
-            let axis = movement["axis"].as_u64().unwrap() as u8;
-            let layer = movement["layer"].as_u64().unwrap() as usize;
-            let turns = movement["turns"].as_i64().unwrap() as i32;
+        for chunk in result[9..].chunks_exact(4) {
+            let packed = u32::from_le_bytes(chunk.try_into().unwrap());
+            let layer = (packed & 0xFFFF) as usize;
+            let axis = ((packed >> 16) & 3) as u8;
+            let turns = ((packed >> 18) & 7) as i32 - 2;
             let (count, dir) = match turns.rem_euclid(4) {
                 1 => (1, 1),
                 2 => (2, 1),
@@ -554,7 +558,7 @@ mod tests {
 
             let control = cube_wasm::native_reduction_control(n);
             let solution = solve_with_rcube(n, &colors, &control, None).unwrap();
-            let solution: serde_json::Value = serde_json::from_str(&solution).unwrap();
+            let solution: serde_json::Value = serde_json::from_slice(&solution[1..]).unwrap();
             for movement in solution["moves"].as_array().unwrap() {
                 lab.apply_design_move(
                     movement["axis"].as_u64().unwrap() as u8,
@@ -593,8 +597,11 @@ mod tests {
                 started.elapsed()
             );
             let result = result.expect("RCube must solve and replay the browser-smoke state");
-            let result: serde_json::Value = serde_json::from_str(&result).unwrap();
-            assert_eq!(result["winner"], "rcube");
+            assert!(result.len() > 9 || result[0] == 0);
+            if result[0] == 0 {
+                let result: serde_json::Value = serde_json::from_slice(&result[1..]).unwrap();
+                assert_eq!(result["winner"], "rcube");
+            }
         }
     }
 
