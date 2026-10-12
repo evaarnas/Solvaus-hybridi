@@ -2069,7 +2069,7 @@ class Component extends DCLogic {
       showCancel(self, false);
       var res = null;
       if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
-      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture'&&self.n>21);
+      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&self.mode==='texture');
       if (!res || !res.found || !res.moves || !res.moves.length){
         self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
@@ -2099,14 +2099,28 @@ class Component extends DCLogic {
       }
       var textureReplayMoves = null;
       if (self.mode === 'texture') {
-        textureReplayMoves = res.moves.map(function(m){
-          return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
-        });
-        var validTexturePath=textureReplayMoves.every(function(m){
-          return Number.isInteger(m.axis)&&m.axis>=0&&m.axis<=2&&
-            Number.isInteger(m.layer)&&m.layer>=0&&m.layer<self.n&&
-            Number.isInteger(m.turns)&&[-2,-1,1,2].indexOf(m.turns)>=0;
-        });
+        var texN=self.n, totalTurns=0, validTexturePath=true;
+        if (compactNativeTextureResult){
+          textureReplayMoves = res.moves;
+          for (var ti=0, tl=res.moves.length; ti<tl; ti++){
+            var tm=res.moves[ti], tt=tm.turns;
+            if (!(tm.axis>=0&&tm.axis<=2&&tm.layer>=0&&tm.layer<texN&&(tt===1||tt===-1||tt===2||tt===-2))){ validTexturePath=false; break; }
+            totalTurns+=(tt===2||tt===-2)?2:1;
+          }
+        } else {
+          textureReplayMoves = res.moves.map(function(m){
+            return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
+          });
+          validTexturePath=textureReplayMoves.every(function(m){
+            return Number.isInteger(m.axis)&&m.axis>=0&&m.axis<=2&&
+              Number.isInteger(m.layer)&&m.layer>=0&&m.layer<texN&&
+              Number.isInteger(m.turns)&&[-2,-1,1,2].indexOf(m.turns)>=0;
+          });
+          totalTurns=textureReplayMoves.reduce(function(total, m){
+            var amount=((m.turns%4)+4)%4;
+            return total+(amount===2?2:amount===0?0:1);
+          },0);
+        }
         if(!validTexturePath){
           rebuildFromScrambleHistory(self);
           self._lastSolveTelemetry={n:self.n,elapsedMs:elapsedMs,verified:false,error:'RCube returned an invalid replay path'};
@@ -2136,10 +2150,7 @@ class Component extends DCLogic {
         self._textureReplayMoves = textureReplayMoves;
         self._textureReplayIndex = 0;
         self._textureReplayTurnsLeft = 0;
-        self.totalMoves = textureReplayMoves.reduce(function(total, m){
-          var amount=((m.turns%4)+4)%4;
-          return total+(amount===2?2:amount===0?0:1);
-        },0);
+        self.totalMoves = totalTurns;
         self.texProg = 0;
         self._textureDrawBucket = -1;
       } else {

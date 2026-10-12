@@ -4,6 +4,7 @@
 use cube_core::{Axis, CubeSize, Move};
 use cube_wasm::NativeReductionControl;
 use std::ffi::{c_char, c_void, CStr};
+use std::fmt::Write as _;
 use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{ipc::Channel, State};
@@ -155,6 +156,7 @@ fn solve_with_rcube(
 
     let size = CubeSize::new(n).map_err(|error| error.to_string())?;
     let mut moves = Vec::new();
+    let mut compact_moves = String::new();
     let mut notation = Vec::with_capacity(engine_moves.len());
     let mut move_count = 0usize;
     for engine_move in engine_moves {
@@ -194,32 +196,34 @@ fn solve_with_rcube(
                 3 => -1,
                 _ => 0,
             };
-            moves.push(serde_json::json!({
-                "axis": axis,
-                "layer": movement.layer_start,
-                "turns": compact_turns
-            }));
+            if !compact_moves.is_empty() {
+                compact_moves.push(',');
+            }
+            let _ = write!(
+                compact_moves,
+                "{{\"axis\":{},\"layer\":{},\"turns\":{}}}",
+                axis, movement.layer_start, compact_turns
+            );
         }
     }
 
-    Ok(serde_json::json!({
-        "found": true,
-        "solvedByRcube": true,
-        "compactMoves": n > TEXTURE_RENDER_THRESHOLD,
-        "winner": "rcube",
-        "moveCount": move_count,
-        "elapsedMs": started.elapsed().as_millis(),
-        "moves": moves,
-        "notation": notation,
-        "lanes": [{
-            "id": "rcube",
-            "pct": 100,
-            "moveCount": move_count,
-            "label": "RCube center and edge reduction",
-            "solved": true
-        }]
-    })
-    .to_string())
+    // Large solves contain a huge move list; serializing it by hand avoids
+    // building millions of intermediate JSON values before the replay starts.
+    let moves_json = if n > TEXTURE_RENDER_THRESHOLD {
+        format!("[{compact_moves}]")
+    } else {
+        serde_json::Value::Array(moves).to_string()
+    };
+    let notation_json = serde_json::to_string(&notation).map_err(|error| error.to_string())?;
+    Ok(format!(
+        "{{\"found\":true,\"solvedByRcube\":true,\"compactMoves\":{},\"winner\":\"rcube\",\"moveCount\":{},\"elapsedMs\":{},\"moves\":{},\"notation\":{},\"lanes\":[{{\"id\":\"rcube\",\"pct\":100,\"moveCount\":{},\"label\":\"RCube center and edge reduction\",\"solved\":true}}]}}",
+        n > TEXTURE_RENDER_THRESHOLD,
+        move_count,
+        started.elapsed().as_millis(),
+        moves_json,
+        notation_json,
+        move_count
+    ))
 }
 
 fn scramble_with_rcube(n: usize, seed: i32) -> Result<String, String> {
