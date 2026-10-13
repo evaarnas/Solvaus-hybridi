@@ -7,6 +7,8 @@
 
 Create a legal scramble, solve from the visible stickers alone, and watch the verified solution animate on the 3D cube.
 
+<img src="docs/images/studio-1001.png" width="760" alt="Solvaus Hybrid studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
+
 Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
 
 > [!NOTE]
