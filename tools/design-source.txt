@@ -43,10 +43,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
         <span style="font-size:10.5px;color:#A6A299;letter-spacing:.02em;">RCube engine · live 3D solver</span>
       </div>
     </div>
-    <nav role="tablist" aria-label="Workspace" style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
-      <button id="studio-tab" role="tab" aria-controls="studio-panel" data-view="studio" onClick="{{ onViewClick }}" style="padding:7px 17px;border-radius:8px;font-size:13px;font-weight:500;color:#8C887F;transition:.18s;">Studio</button>
-      <button id="swarm-tab" role="tab" aria-controls="swarm-panel" data-view="swarm" onClick="{{ onViewClick }}" style="padding:7px 17px;border-radius:8px;font-size:13px;font-weight:500;color:#8C887F;transition:.18s;">Swarm</button>
-    </nav>
+    <div></div>
     <div style="display:flex;align-items:center;gap:14px;">
       <button data-spin aria-pressed="true" aria-label="Toggle automatic cube orbit" onClick="{{ onSpinToggle }}" style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8C887F;padding:6px 8px;border-radius:8px;">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
@@ -60,7 +57,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
   <main class="main-area" style="flex:1;position:relative;min-height:0;">
 
     <!-- ===== STUDIO ===== -->
-    <div id="studio-panel" role="tabpanel" aria-labelledby="studio-tab" data-id="studio" class="studio-layout" style="display:flex;height:100%;gap:16px;padding:16px;">
+    <div id="studio-panel" data-id="studio" class="studio-layout" style="display:flex;height:100%;gap:16px;padding:16px;">
 
       <!-- viewport -->
       <div class="cube-viewport" aria-label="Interactive cube viewport" style="flex:1;min-width:0;position:relative;background:linear-gradient(180deg,#FFFFFF 0%,#FBFBF9 100%);border:1px solid #ECEAE4;border-radius:22px;box-shadow:0 1px 2px rgba(20,20,18,.04),0 22px 48px -26px rgba(20,20,18,.16);overflow:hidden;">
@@ -272,39 +269,6 @@ button:disabled{cursor:not-allowed;opacity:.42}
       </aside>
     </div>
 
-    <!-- ===== SWARM ===== -->
-    <div id="swarm-panel" role="tabpanel" aria-labelledby="swarm-tab" data-id="swarm" style="display:none;height:100%;flex-direction:column;padding:18px 20px;">
-      <div style="flex:none;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:14px;">
-        <div style="display:flex;align-items:center;gap:26px;">
-          <div style="display:flex;flex-direction:column;line-height:1;">
-            <span data-swarm-total style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;">0</span>
-            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">cubes converged</span>
-          </div>
-          <div style="display:flex;flex-direction:column;line-height:1;">
-            <span data-swarm-run style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;color:#1573E6;">0</span>
-            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">solving now</span>
-          </div>
-          <div style="display:flex;flex-direction:column;line-height:1;">
-            <span data-swarm-avg style="font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:500;letter-spacing:-.02em;">0%</span>
-            <span style="font-size:11.5px;color:#A6A299;margin-top:5px;letter-spacing:.02em;">avg progress</span>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <div style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
-            <button data-count="16" onClick="{{ onCountClick }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">16</button>
-            <button data-count="36" onClick="{{ onCountClick }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">36</button>
-            <button data-count="64" onClick="{{ onCountClick }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">64</button>
-            <button data-count="100" onClick="{{ onCountClick }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;font-family:'JetBrains Mono',monospace;transition:.16s;">100</button>
-          </div>
-          <div style="display:flex;background:#EDEBE5;border-radius:11px;padding:3px;gap:2px;">
-            <button data-sspeed="calm" onClick="{{ onSwarmSpeed }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Calm</button>
-            <button data-sspeed="lively" onClick="{{ onSwarmSpeed }}" style="padding:7px 13px;border-radius:8px;font-size:12.5px;font-weight:500;color:#8C887F;transition:.16s;">Lively</button>
-          </div>
-        </div>
-      </div>
-      <div data-swarm style="flex:1;overflow-y:auto;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));align-content:start;justify-content:center;padding-bottom:4px;"></div>
-    </div>
-
   </main>
 </div>
 </x-dc>
@@ -315,7 +279,6 @@ class Component extends DCLogic {
   renderVals() {
     return {
       rootRef: (el) => { if (el) this.root = el; },
-      onViewClick: (e) => this.setView(e.currentTarget.dataset.view),
       onIncN: () => this.setN(this.n + 1),
       onDecN: () => this.setN(this.n - 1),
       onScramble: () => this.scramble(),
@@ -327,8 +290,6 @@ class Component extends DCLogic {
       onSpeedClick: (e) => this.setSpeed(e.currentTarget.dataset.speed),
       onSpinToggle: () => { this.autoSpin = !this.autoSpin; this.syncControls(); },
       onCopy: () => this.copyPath(),
-      onCountClick: (e) => this.setSwarmCount(parseInt(e.currentTarget.dataset.count, 10)),
-      onSwarmSpeed: (e) => { this.swarmSpeed = e.currentTarget.dataset.sspeed === 'lively' ? 2.0 : 1.0; this.syncControls(); },
     };
   }
 
@@ -350,8 +311,6 @@ class Component extends DCLogic {
     this.view = 'studio';
     this.reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.autoSpin = this.props.autoSpin !== false && !this.reducedMotion;
-    this.swarmCount = 64;
-    this.swarmSpeed = 1.0;
     this.accent = this.props.accent || '#161514';
     const pals = this.palettes();
     this.PAL = pals[this.props.palette] || pals.Classic;
@@ -369,8 +328,6 @@ class Component extends DCLogic {
     this.lastScramble = [];
     this.lastSolution = [];
     this.solveProgress = 0;
-    this.cards = [];
-    this.cumulativeSolves = 0;
     this.vel = { x: 0, y: 0 };
     this.dragging = false;
 
@@ -378,7 +335,7 @@ class Component extends DCLogic {
     this.syncControls();
 
     const boot = () => {
-      if (window.THREE) { this.initThree(); this.buildCube(this.n); this.initSwarm(); this.loop(); }
+      if (window.THREE) { this.initThree(); this.buildCube(this.n); this.loop(); }
       else setTimeout(boot, 30);
     };
     boot();
@@ -390,20 +347,6 @@ class Component extends DCLogic {
       if (e.code === 'Space') { e.preventDefault(); this.scrambled ? this.solve() : this.scramble(); }
       else if (e.key === 's' || e.key === 'S') this.scramble();
       else if (e.key === 'r' || e.key === 'R') this.replay();
-    });
-    this.root.addEventListener('keydown', this.onTabKey = (e) => {
-      if (!e.target || e.target.getAttribute('role') !== 'tab') return;
-      const tabs = this.qa('[role="tab"]');
-      const current = tabs.indexOf(e.target);
-      let next = current;
-      if (e.key === 'ArrowRight') next = (current + 1) % tabs.length;
-      else if (e.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
-      else if (e.key === 'Home') next = 0;
-      else if (e.key === 'End') next = tabs.length - 1;
-      else return;
-      e.preventDefault();
-      this.setView(tabs[next].dataset.view);
-      tabs[next].focus();
     });
   }
 
@@ -426,8 +369,6 @@ class Component extends DCLogic {
       solTime: this.q('[data-sol-time]'),
       solChips: this.q('[data-sol-chips]'),
       studio: this.q('[data-id="studio"]'),
-      swarmView: this.q('[data-id="swarm"]'),
-      swarmGrid: this.q('[data-swarm]'),
     };
     this.ringCirc = 2 * Math.PI * 28;
     this.ui.ring.setAttribute('stroke-dasharray', this.ringCirc);
@@ -1129,13 +1070,7 @@ class Component extends DCLogic {
     this.view = v;
     this.ui.studio.style.display = v === 'studio' ? 'flex' : 'none';
     this.ui.studio.hidden = v !== 'studio';
-    this.ui.swarmView.style.display = v === 'swarm' ? 'flex' : 'none';
-    this.ui.swarmView.hidden = v !== 'swarm';
     if (v === 'studio') setTimeout(() => this.resize(), 30);
-    // A solved Studio cube gives the swarm nothing to learn (every trial is instantly
-    // solved and the wall is all green). Auto-scramble on entry so the swarm immediately
-    // shows the agents actually learning to solve.
-    if (v === 'swarm' && !this.scrambled && !this.busy) this.scramble();
     this.syncControls();
   }
   // Product sizes stay inside the desktop solver's replay-verified range. The
@@ -1153,38 +1088,13 @@ class Component extends DCLogic {
     this.speedDur = s === 'slow' ? 0.9 : s === 'fast' ? 0.26 : 0.52;
     this.speed = s; this.syncControls();
   }
-  setSwarmCount(c) { this.swarmCount = c; this.initSwarm(); this.syncControls(); }
 
   syncControls() {
-    // view toggle
-    this.qa('[data-view]').forEach(b => {
-      const on = b.dataset.view === this.view;
-      b.style.background = on ? '#fff' : 'transparent';
-      b.style.color = on ? '#161514' : '#8C887F';
-      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.12)' : 'none';
-      b.setAttribute('aria-selected', String(on));
-      b.tabIndex = on ? 0 : -1;
-    });
     const nsl = this.q('[data-nslider]'); if (nsl) nsl.value = this.nToSlider(this.n);
     const nv = this.q('[data-nval]'); if (nv) nv.textContent = `${this.n}×${this.n}`;
     // speed
     this.qa('[data-speed]').forEach(b => {
       const on = b.dataset.speed === (this.speed || 'normal');
-      b.style.background = on ? '#fff' : 'transparent';
-      b.style.color = on ? '#161514' : '#8C887F';
-      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
-      b.setAttribute('aria-pressed', String(on));
-    });
-    // swarm count + speed
-    this.qa('[data-count]').forEach(b => {
-      const on = parseInt(b.dataset.count, 10) === this.swarmCount;
-      b.style.background = on ? '#fff' : 'transparent';
-      b.style.color = on ? '#161514' : '#8C887F';
-      b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
-      b.setAttribute('aria-pressed', String(on));
-    });
-    this.qa('[data-sspeed]').forEach(b => {
-      const on = (b.dataset.sspeed === 'lively') === (this.swarmSpeed > 1.5);
       b.style.background = on ? '#fff' : 'transparent';
       b.style.color = on ? '#161514' : '#8C887F';
       b.style.boxShadow = on ? '0 1px 3px rgba(20,20,18,.1)' : 'none';
@@ -1207,123 +1117,6 @@ class Component extends DCLogic {
     dis(this.q('[data-act-replay]'), this.busy || this.lastScramble.length === 0);
     dis(this.q('[data-act-reset]'), this.busy);
     this.qa('[data-inc],[data-dec]').forEach(b => dis(b, this.busy));
-  }
-
-  // =================== SWARM ===================
-  initSwarm() {
-    const grid = this.ui.swarmGrid;
-    grid.innerHTML = '';
-    this.cards = [];
-    const faces = this.faceList;
-    const faces6 = [this.PAL.w, this.PAL.g, this.PAL.r, this.PAL.b, this.PAL.o, this.PAL.y]; // top,front,right,back,left,bottom
-    for (let i = 0; i < this.swarmCount; i++) {
-      const card = document.createElement('div');
-      card.style.cssText = 'position:relative;height:154px;background:#fff;border:1px solid #ECEAE4;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 1px 2px rgba(20,20,18,.03);overflow:hidden;transition:box-shadow .3s,border-color .3s;';
-      const ringSize = 90, rr = 39, circ = 2 * Math.PI * rr;
-      const cellsHtml = () => {
-        let h = '';
-        for (let k = 0; k < 9; k++) h += '<div data-cell style="border-radius:3px;background:#1a1c20;"></div>';
-        return h;
-      };
-      const fs = (extra) => `position:absolute;width:38px;height:38px;left:16px;top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;background:#0a0b0d;border-radius:5px;backface-visibility:hidden;${extra}`;
-      card.innerHTML = `
-        <div style="position:relative;width:${ringSize}px;height:${ringSize}px;display:flex;align-items:center;justify-content:center;">
-          <svg width="${ringSize}" height="${ringSize}" viewBox="0 0 ${ringSize} ${ringSize}" style="position:absolute;inset:0;">
-            <circle cx="${ringSize/2}" cy="${ringSize/2}" r="${rr}" stroke="#EFEDE7" stroke-width="4" fill="none"/>
-            <circle data-cring cx="${ringSize/2}" cy="${ringSize/2}" r="${rr}" stroke="${this.accent}" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="${circ}" stroke-dashoffset="${circ}" transform="rotate(-90 ${ringSize/2} ${ringSize/2})"/>
-          </svg>
-          <div style="perspective:260px;width:70px;height:70px;">
-            <div data-inner style="position:relative;width:70px;height:70px;transform-style:preserve-3d;transform:rotateX(-20deg) rotateY(-37deg);">
-              <div style="${fs('transform:rotateX(90deg) translateZ(19px);')}">${cellsHtml()}</div>
-              <div style="${fs('transform:translateZ(19px);')}">${cellsHtml()}</div>
-              <div style="${fs('transform:rotateY(90deg) translateZ(19px);')}">${cellsHtml()}</div>
-              <div style="${fs('transform:rotateY(180deg) translateZ(19px);')}">${cellsHtml()}</div>
-              <div style="${fs('transform:rotateY(-90deg) translateZ(19px);')}">${cellsHtml()}</div>
-              <div style="${fs('transform:rotateX(-90deg) translateZ(19px);')}">${cellsHtml()}</div>
-            </div>
-          </div>
-          <div data-check style="position:absolute;right:6px;top:6px;width:18px;height:18px;border-radius:50%;background:#00A24B;display:none;align-items:center;justify-content:center;color:#fff;font-size:11px;">✓</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#A6A299;font-family:'JetBrains Mono',monospace;">
-          <span>#${String(i + 1).padStart(2, '0')}</span>
-          <span data-cnt style="color:#C7C3BA;">54 off</span>
-        </div>`;
-      grid.appendChild(card);
-      const cellEls = Array.from(card.querySelectorAll('[data-cell]'));
-      const solvedCol = cellEls.map((_, k) => faces6[Math.floor(k / 9)]);
-      const cardObj = {
-        card, inner: card.querySelector('[data-inner]'), cring: card.querySelector('[data-cring]'), check: card.querySelector('[data-check]'),
-        cnt: card.querySelector('[data-cnt]'), cells: cellEls, solvedCol, circ,
-        prog: 0, applied: -1, speed: 0.16 + Math.random() * 0.24, delay: Math.random() * 2.4,
-        order: this.shuffle([...Array(54).keys()]), state: 'run', restT: 0, scr: [],
-        rot: Math.random() * 360, spin: 9 + Math.random() * 15,
-      };
-      this.rescr(cardObj);
-      this.cards.push(cardObj);
-    }
-    this.cumulativeSolves = 0;
-    this.swarmFrame = 0;
-  }
-
-  shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; }
-
-  rescr(c) {
-    c.scr = c.cells.map(() => this.faceList[Math.floor(Math.random() * 6)]);
-    c.cells.forEach((el, k) => el.style.background = c.scr[k]);
-    c.applied = 0;
-  }
-
-  updateSwarm(dt) {
-    let solvingNow = 0, progSum = 0;
-    const g = this.swarmSpeed;
-    for (const c of this.cards) {
-      if (!this.reducedMotion) {
-        c.rot += dt * c.spin;
-        if (c.inner) c.inner.style.transform = `rotateX(-20deg) rotateY(${c.rot}deg)`;
-      }
-      if (c.delay > 0) { c.delay -= dt; solvingNow++; continue; }
-      if (c.state === 'run') {
-        solvingNow++;
-        c.prog = Math.min(1, c.prog + dt * c.speed * g);
-        const target = Math.floor(c.prog * 54);
-        while (c.applied < target) {
-          const idx = c.order[c.applied];
-          if (c.cells[idx]) c.cells[idx].style.background = c.solvedCol[idx];
-          c.applied++;
-        }
-        c.cring.style.strokeDashoffset = c.circ * (1 - c.prog);
-        const off = 54 - c.applied;
-        c.cnt.textContent = off + ' off';
-        if (c.prog >= 1) {
-          c.state = 'rest'; c.restT = 0;
-          c.cring.style.stroke = '#00A24B'; c.check.style.display = 'flex';
-          c.cnt.textContent = 'solved'; c.cnt.style.color = '#1BA64B';
-          c.card.style.borderColor = '#CDEAD4'; c.card.style.boxShadow = '0 4px 16px -6px rgba(27,166,75,.4)';
-          c.check.style.animation = 'pop .4s ease';
-          this.cumulativeSolves++;
-        }
-      } else {
-        c.restT += dt;
-        if (c.restT > 1.1 + Math.random()) {
-          c.state = 'run'; c.prog = 0; c.applied = 0;
-          c.order = this.shuffle([...Array(54).keys()]);
-          c.speed = 0.18 + Math.random() * 0.28;
-          c.cring.style.stroke = this.accent; c.cring.style.strokeDashoffset = c.circ;
-          c.check.style.display = 'none'; c.check.style.animation = '';
-          c.cnt.style.color = '#C7C3BA';
-          c.card.style.borderColor = '#ECEAE4'; c.card.style.boxShadow = '0 1px 2px rgba(20,20,18,.03)';
-          this.rescr(c);
-        }
-      }
-      progSum += c.prog;
-    }
-    // header stats throttled
-    this.swarmFrame = (this.swarmFrame || 0) + 1;
-    if (this.swarmFrame % 4 === 0) {
-      const total = this.q('[data-swarm-total]'); if (total) total.textContent = this.cumulativeSolves.toLocaleString();
-      const run = this.q('[data-swarm-run]'); if (run) run.textContent = solvingNow;
-      const avg = this.q('[data-swarm-avg]'); if (avg) avg.textContent = Math.round((progSum / Math.max(1, this.cards.length)) * 100) + '%';
-    }
   }
 
   // =================== LOOP ===================
@@ -1370,8 +1163,6 @@ class Component extends DCLogic {
           }
         }
         this.renderer.render(this.scene, this.camera);
-      } else if (this.view === 'swarm') {
-        this.updateSwarm(dt);
       }
     };
     tick();
@@ -1381,7 +1172,6 @@ class Component extends DCLogic {
     if (this._raf) cancelAnimationFrame(this._raf);
     if (this.ro) this.ro.disconnect();
     if (this.onKey) window.removeEventListener('keydown', this.onKey);
-    if (this.onTabKey && this.root) this.root.removeEventListener('keydown', this.onTabKey);
   }
 }
 </script>

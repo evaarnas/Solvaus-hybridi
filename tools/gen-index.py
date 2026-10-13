@@ -45,7 +45,6 @@ WIRE = r'''
     const origScramble = inst.scramble.bind(inst);
     const origReset = inst.resetSolved ? inst.resetSolved.bind(inst) : null;
     const origSetN = inst.setN ? inst.setN.bind(inst) : null;
-    const origSetView = inst.setView ? inst.setView.bind(inst) : null;
     const origBuildCube = inst.buildCube ? inst.buildCube.bind(inst) : null;
     const origFinalizeMove = inst.finalizeMove ? inst.finalizeMove.bind(inst) : null;
 
@@ -345,7 +344,7 @@ WIRE = r'''
       if (this._refreshCustomScramble) this._refreshCustomScramble(this);
     };
 
-    // A user can click Swarm during the brief async WASM boot window, when the
+    // A user can click Solve during the brief async WASM boot window, when the
     // authored scramble method is still installed. Reconstruct that exact target
     // state in CubeLab before any post-wire solve reads sticker colours.
     function syncLabFromVisibleScramble(self){
@@ -508,8 +507,6 @@ WIRE = r'''
         var stat = self.root.querySelector('[data-lane="det"] [data-stat]');
         if (stat) stat.textContent='verified · replay '+(self.movesDone||0).toLocaleString()+' / '+(self.totalMoves||0).toLocaleString()+' · elapsed '+self._replayElapsedLabel;
       }
-      var replayTimer = self.root.querySelector('[data-replay-elapsed]');
-      if (replayTimer) replayTimer.textContent=self._replayElapsedLabel;
     }
     function updateReplayActivity(self){
       var replaying = self.busy && self.phase === 'solving' && !self._solvePending;
@@ -889,7 +886,6 @@ WIRE = r'''
       clearTimeout(this._solveWatchdog);
       clearTimeout(this._workerLoadTimer);
       clearTimeout(this._fallbackTimer);
-      clearTimeout(this._swarmAutoStartTimer);
       clearInterval(this._solveHeartbeat);
       clearInterval(this._replayHeartbeat);
       if (this._solvePending && this._solveDispatch === 'native' && nativeCore()){
@@ -919,174 +915,6 @@ WIRE = r'''
         return;
       }
       return origUpdateLanes(f);
-    };
-
-    // ---- real evolutionary swarm: each card is a live learning trial ----
-    var SWPAL = [inst.PAL.w, inst.PAL.y, inst.PAL.g, inst.PAL.b, inst.PAL.o, inst.PAL.r];
-    var FACE_FOR_CARD = [0,2,5,3,4,1]; // card faces [U,F,R,B,L,D] -> wasm [Up,Down,Front,Back,Left,Right]
-    var origInitSwarm = inst.initSwarm ? inst.initSwarm.bind(inst) : null;
-    var origUpdateSwarm = inst.updateSwarm ? inst.updateSwarm.bind(inst) : null;
-
-    function swarmKey(self){ return (self.n||3)+':'+JSON.stringify(self.lastScramble||[]); }
-    var SWARM_MAX = 3;   // search/evolution only genuinely solves 2×2 / 3×3
-    function makeSwarm(self){
-      try {
-        if ((self.n||3) > SWARM_MAX){ self.swarmLab = null; self._swarmKey = swarmKey(self); return; }
-        var cnt = (self.cards||[]).length||16;
-        var ls = self.lastScramble || [];
-        self.swarmLab = new Swarm(cnt, self.n||3, Math.max(3, self.scrambleDepth||6), BigInt(secureBelow(0x100000000))+1n);
-        // Always seed the swarm from the EXACT Studio cube. Empty scramble (a
-        // solved Studio) → solved base, so the wall mirrors the on-screen cube.
-        self.swarmLab.set_scramble(
-          Uint8Array.from(ls.map(function(m){return m.axis;})),
-          Uint32Array.from(ls.map(function(m){return m.layer;})),
-          Int32Array.from(ls.map(function(m){return m.dir;})));
-        self.swarmShared = ls.length > 0;
-        self._swarmKey = swarmKey(self);
-        self._swAccum=0; self._swPainted=false;
-      } catch(e){ console.warn('swarm init failed', e); self.swarmLab=null; }
-    }
-
-    if (origInitSwarm) inst.initSwarm = function(){
-      origInitSwarm();
-      this.cumulativeSolves = 0;
-      makeSwarm(this);
-    };
-
-    if (origUpdateSwarm) inst.updateSwarm = function(dt){
-      if (!this.cards || !this.cards.length) return;
-      var grid = this.root.querySelector('[data-swarm]');
-      var msg = this.root.querySelector('[data-swarm-msg]');
-      var liveEl = this.root.querySelector('[data-swarm-live]');
-      var note = this.root.querySelector('[data-swarm-note]');
-      // Remember the grid's real display value so we can restore it (don't blank it).
-      if (grid && this._gridDisp === undefined) this._gridDisp = grid.style.display || 'grid';
-      // Truthful dual mode: evolutionary population cards for 2×2/3×3; live
-      // reduction telemetry for 4×4 and larger. Never imply the GA solves big cubes.
-      if ((this.n||3) > SWARM_MAX){
-        this.swarmLab = null;
-        if (grid) grid.style.display = 'none';
-        var n = this.n||3, telem = this._lastSolveTelemetry;
-        var replaying = !!(this.busy && this.phase === 'solving' && telem && telem.n === n && telem.verified);
-        if (n > SOLVE_MAX_N){
-          if (note) note.innerHTML = '<b>Unsupported cube size.</b> Return to Studio and choose a size inside this platform’s replay-verified range.';
-          if (liveEl) liveEl.textContent = 'No solver is available for this size';
-        } else {
-          if (note) note.innerHTML = nativeCore()
-            ? 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Desktop RCube reports its stage-based estimated solve progress; the percentage is an estimate, not a measure of remaining time.'
-            : 'For 4×4 and larger this view switches from evolutionary cards to <b>truthful solver telemetry</b>. Browser reduction reports its stage-based estimated solve progress (centers → edges → 3×3 finish) and replay proof; the percentage is an estimate, not a measure of remaining time.';
-          if (liveEl && liveEl.textContent !== 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3') liveEl.textContent = 'Large-cube solver telemetry — evolutionary search remains available on 2×2 and 3×3';
-        }
-        if (msg){
-          msg.style.display = 'block';
-          var stateKey = n > SOLVE_MAX_N ? ('unsupported:'+n+':'+SOLVE_MAX_N) :
-            this._solvePending ? ('active:'+n+':'+this._solveDispatch) :
-            replaying ? ('replay:'+n+':'+telem.moveCount) :
-            telem && telem.n === n && telem.verified ? ('verified:'+n+':'+telem.moveCount+':'+Math.round(telem.elapsedMs)) :
-            telem && telem.n === n ? ('failed:'+n+':'+String(telem.error)) : ('ready:'+n);
-          if (msg._telemetryState !== stateKey){
-            msg._telemetryState = stateKey;
-            var nativeRcube = !!nativeCore() && n >= 4 && n <= SOLVE_MAX_N;
-            var pipelineSteps = nativeRcube
-              ? ['sticker state','RCube centers','corners','edges','Rust replay']
-              : ['sticker state','centers','edge wings','reduced 3×3','independent replay'];
-            var pipeline = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 10px;">' +
-              pipelineSteps.map(function(s){ return '<span style="padding:5px 8px;border:1px solid #D9E2D5;border-radius:999px;background:#fff;font-size:11px;color:#5E6C59;">'+s+'</span>'; }).join('<span style="color:#A9B3A5;padding:5px 0;">→</span>') + '</div>';
-            if (n > SOLVE_MAX_N){
-              msg.innerHTML = '<b>'+n+'×'+n+' is not supported.</b><div style="margin-top:7px;">This build intentionally offers only sizes with a replay-verified solver.</div>';
-            } else if (this._solvePending){
-              var nativeSolving = this._solveDispatch === 'native';
-              msg.innerHTML = '<div style="display:flex;align-items:center;gap:9px;color:#1573E6;"><span style="width:10px;height:10px;border-radius:50%;background:#1573E6;box-shadow:0 0 0 5px rgba(21,115,230,.12);"></span><b>'+
-                (nativeSolving ? 'Native reduction is active (RCube engine)' : 'WASM solver is active') +
-                '</b></div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:12px;">'+n+'×'+n+' · <span data-reduction-elapsed aria-hidden="true">0s</span>' +
-                ' · <span data-native-solve-progress>0%</span>' + '</div>' + pipeline +
-                '<div style="font-size:12px;color:#6F756A;">Working from '+(6*n*n).toLocaleString()+' visible sticker colours. '+
-                (nativeSolving ? 'RCube percentage is its stage-based estimate; it does not predict remaining time.' : 'The percentage is a stage-based estimate (centers → edges → 3×3 finish); it does not predict remaining time.')+'</div>'+
-                '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel solve</button>';
-            } else if (replaying){
-              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ '+(nativeRcube?'RCube reports solved — replaying':'Verified solution is replaying')+'</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
-                '<div style="font-size:12px;color:#6F756A;"><span data-replay-moves>0 / '+this.totalMoves+' animation steps</span> · elapsed <span data-replay-elapsed aria-hidden="true">0s</span></div>'+
-                '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel playback</button>';
-            } else if (telem && telem.n === n && telem.verified){
-              msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ Replay-verified solver result</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
-                '<div style="font-size:12px;color:#6F756A;">The returned legal moves were independently replayed to solved before animation began.</div>';
-            } else if (telem && telem.n === n && !telem.verified){
-              msg.innerHTML = '<div style="color:#A35A24;font-weight:650;">Solver stopped without a verified path</div><div style="margin-top:8px;font-size:12px;color:#6F756A;">See the Studio status for details, then retry or choose a smaller cube.</div>' + pipeline;
-            } else {
-              msg.innerHTML = '<b>'+n+'×'+n+' uses a dedicated large-cube solver, not evolutionary search.</b><div style="margin-top:7px;">Start it here to watch live elapsed activity, its real solving stages, and replay-verified results.</div>' + pipeline +
-                '<button type="button" data-reduction-start style="margin-top:8px;padding:10px 14px;border:0;border-radius:10px;background:#161514;color:#fff;font-weight:600;cursor:pointer;">Start solve</button>';
-            }
-          }
-          var timer=msg.querySelector('[data-reduction-elapsed]');
-          if (timer) timer.textContent=elapsedLabel(this._solveElapsedMs||0);
-          var replay=msg.querySelector('[data-replay-moves]');
-          if (replay) replay.textContent=(this.movesDone||0).toLocaleString()+' / '+(this.totalMoves||0).toLocaleString()+' animation steps';
-          var start=msg.querySelector('[data-reduction-start]');
-          if (start && !start._wired){ start._wired=true; var self=this; start.addEventListener('click', function(){ if (!self._solvePending && !self.busy) self.solve(); }); }
-          var cancel=msg.querySelector('[data-reduction-cancel]');
-          if (cancel && !cancel._wired){ cancel._wired=true; var self2=this; cancel.addEventListener('click', function(){ cancelSolve(self2); }); }
-        }
-        return;
-      }
-      if (grid) grid.style.display = this._gridDisp;
-      if (msg) msg.style.display = 'none';
-      if (note) note.innerHTML = 'Each cell is one <b>trial of the evolutionary solver</b>, and every trial starts as an exact copy of <b>your Studio cube</b>. They mutate and recombine until a trial reaches solved (it turns green, then restarts from the cube). Change the Studio scramble and the whole wall instantly re-syncs to it. The trials see only the cube state, never the scramble.';
-      // Always track the Studio cube: rebuild whenever its scramble (or N) changes.
-      if (!this.swarmLab) makeSwarm(this);
-      else if (this._swarmKey !== swarmKey(this)) makeSwarm(this);
-      if (liveEl){
-        liveEl.textContent = this.swarmShared
-          ? ('Tracking your Studio cube — ' + this.n + '×' + this.n + ', ' + (this.lastScramble||[]).length + '-move scramble')
-          : 'Studio cube is solved — scramble it to watch the swarm learn to solve it';
-      }
-      if (!this.swarmLab) return origUpdateSwarm(dt);
-      try {
-        var g = this.swarmSpeed || 1;
-        this._swAccum = (this._swAccum||0) + dt * g * 100;
-        var steps=0; while (this._swAccum >= 1 && steps < 24){ this.swarmLab.step(); this._swAccum -= 1; steps++; }
-        // Spin every frame (cheap); only re-read the WASM population metadata and
-        // 54 sampled stickers when evolution advanced (or on first paint).
-        var repaint = steps > 0 || !this._swPainted;
-        var buf = repaint ? this.swarmLab.render() : null;
-        var N = Math.min(this.cards.length, this.swarmLab.member_count());
-        for (var i=0;i<N;i++){
-          var c = this.cards[i];
-          if (!this.reducedMotion){
-            c.rot += dt * c.spin;
-            if (c.inner) c.inner.style.transform = 'rotateX(-20deg) rotateY('+c.rot+'deg)';
-          }
-          if (!repaint) continue;
-          var b = i*62, pct = buf[b];
-          var mismatch = buf[b+1] | (buf[b+2] << 8);
-          var genes = buf[b+3] | (buf[b+4] << 8);
-          var stuck = buf[b+5];
-          var op = ['seed','mutation','crossover','restart'][buf[b+7]] || 'search';
-          // per-cell colour cache; reset if the design rebuilt this card's cells
-          if (!c.last || c._lastCells !== c.cells){ c.last = new Int8Array(54).fill(-1); c._lastCells = c.cells; }
-          for (var k=0;k<54;k++){
-            var cf=(k/9)|0, cell=k%9, wf=FACE_FOR_CARD[cf];
-            var ci = buf[b + 8 + wf*9 + cell];
-            // only touch the DOM when a sticker's colour actually changes
-            if (c.cells[k] && c.last[k] !== ci){ c.cells[k].style.background = SWPAL[ci] || SWPAL[0]; c.last[k] = ci; }
-          }
-          c.cring.style.strokeDashoffset = c.circ * (1 - pct/100);
-          if (pct >= 100){
-            c.cring.style.stroke = '#00A24B'; c.check.style.display='flex';
-            c.cnt.textContent='solved · '+op; c.cnt.style.color='#1BA64B';
-            c.card.style.borderColor='#CDEAD4'; c.card.style.boxShadow='0 4px 16px -6px rgba(27,166,75,.4)';
-          } else {
-            c.cring.style.stroke = this.accent; c.check.style.display='none';
-            c.cnt.textContent = mismatch + ' off · ' + genes + ' genes · ' + (stuck ? 'plateau '+stuck : op); c.cnt.style.color='#8C887F';
-            c.card.style.borderColor='#ECEAE4'; c.card.style.boxShadow='0 1px 2px rgba(20,20,18,.03)';
-          }
-        }
-        if (repaint){
-          this._swPainted = true;
-          var t=this.q('[data-swarm-total]'); if(t) t.textContent = this.swarmLab.converged().toLocaleString();
-          var r=this.q('[data-swarm-run]'); if(r) r.textContent = this.swarmLab.solving_now();
-          var a=this.q('[data-swarm-avg]'); if(a) a.textContent = Math.round(this.swarmLab.avg_progress()*100)+'%';
-        }
-      } catch(e){ console.warn('swarm update failed', e); this.swarmLab = null; }
     };
 
     function updateProof(self, scrambleLen, solutionLen){
@@ -1122,30 +950,11 @@ WIRE = r'''
           el.firstElementChild.insertAdjacentElement('afterend', d);
         }
       });
-      var grid = self.root.querySelector('[data-swarm]');
-      if (grid && !self.root.querySelector('[data-swarm-note]')){
-        var note = document.createElement('div'); note.setAttribute('data-swarm-note','');
-        note.style.cssText='font-size:12px;color:#7d7a72;line-height:1.55;margin:0 2px 14px;max-width:780px;';
-        note.innerHTML = 'Each cell is one <b>trial of the evolutionary solver</b>, and every trial starts as an exact copy of <b>your Studio cube</b>. They mutate and recombine until a trial reaches solved (it turns green, then restarts from the cube). Change the Studio scramble and the whole wall instantly re-syncs to it. The trials see only the cube state, never the scramble.';
-        var live = document.createElement('div'); live.setAttribute('data-swarm-live','');
-        live.style.cssText='font-size:11.5px;font-weight:500;color:#1573E6;margin:0 2px 12px;';
-        live.textContent = 'Tracking your Studio cube';
-        var msg = document.createElement('div'); msg.setAttribute('data-swarm-msg','');
-        msg.setAttribute('role','status'); msg.setAttribute('aria-live','polite');
-        msg.style.cssText='display:none;font-size:14px;color:#8C887F;line-height:1.6;background:#F7F6F2;border:1px solid #ECEAE4;border-radius:16px;padding:28px 26px;margin:6px 2px;max-width:720px;';
-        grid.parentNode.insertBefore(note, grid);
-        grid.parentNode.insertBefore(live, grid);
-        grid.parentNode.insertBefore(msg, grid);
-      }
     }
     (function(self){
       // Scramble depth stays bounded so every offered challenge remains inside a
       // measured solver path. Cube size is capped later from the active platform.
       var sd = self.root.querySelector('[data-scramble]'); if (sd){ sd.max = 40; }
-      // The Calm/Lively swarm-speed toggle and the swarm count (16/36/…) selector
-      // don't add anything — hide them; the swarm just shows the whole wall.
-      self.root.querySelectorAll('[data-sspeed]').forEach(function(b){ var grp=b.parentElement; if(grp) grp.style.display='none'; });
-      self.root.querySelectorAll('[data-count]').forEach(function(b){ var grp=b.parentElement; if(grp) grp.style.display='none'; });
     })(inst);
     wireExplanations(inst);
 
@@ -1311,32 +1120,6 @@ WIRE = r'''
     configureSupportedSizes(inst);
     wireCustomScramble(inst);
 
-    // Entering Swarm should visibly do work. Small cubes already launch genuine
-    // evolutionary trials; supported large cubes auto-start truthful reduction.
-    // Polling while an early, pre-WASM visual scramble finishes closes the mount
-    // race where the user opens Swarm before wireRealSolver() is installed.
-    function scheduleSwarmReduction(self){
-      clearTimeout(self._swarmAutoStartTimer);
-      self._swarmAutoStartTimer=null;
-      if (self.view !== 'swarm' || (self.n||3) <= SWARM_MAX || (self.n||3) > SOLVE_MAX_N || self._solvePending || (self.busy && self.phase === 'solving')) return;
-      var attempt=function(){
-        self._swarmAutoStartTimer=null;
-        if (self.view !== 'swarm' || (self.n||3) <= SWARM_MAX || (self.n||3) > SOLVE_MAX_N || self._solvePending || (self.busy && self.phase === 'solving')) return;
-        if (self.busy){
-          if (self.phase === 'scrambling') self._swarmAutoStartTimer=setTimeout(attempt, 120);
-          return;
-        }
-        if (!self.scrambled) self.scramble();
-        if (self.busy){ self._swarmAutoStartTimer=setTimeout(attempt, 120); return; }
-        if (self.scrambled && !self._solvePending) self.solve();
-      };
-      self._swarmAutoStartTimer=setTimeout(attempt, 120);
-    }
-    if (origSetView) inst.setView = function(v){
-      origSetView(v);
-      scheduleSwarmReduction(this);
-    };
-
     // Make the "Solver Race" panel honest about which engine actually runs:
     //   • 2×2 — three real engines race (meet-in-the-middle, beam, island genetic);
     //   • 3×3 — the two-phase (Kociemba) solver, shown as one near-optimal lane with
@@ -1447,17 +1230,12 @@ WIRE = r'''
       refreshSolvability(self);
     })(inst);
 
-    // componentDidMount starts before WASM finishes loading. Rebuild the wall
-    // once the real Swarm constructor is available so an early WebGL failure or
-    // mount race can never leave the Swarm tab blank/inert.
-    try { if (inst.initSwarm) inst.initSwarm(); } catch(e){ console.warn('swarm remount failed', e); }
     function ensureAnimationLoop(self){
       if (self._raf || !window.THREE || !self.loop) return;
       if (!self.clock) self.clock = new window.THREE.Clock();
       self.loop();
     }
     ensureAnimationLoop(inst);
-    scheduleSwarmReduction(inst);
   }
 
   function markLive(){}
@@ -1498,7 +1276,7 @@ BOOT = r'''
     }
     // componentDidMount calls buildCube immediately after initThree. If renderer
     // creation failed, the authored materials do not exist yet; skip only the 3D
-    // build so mount, WASM loading, controls, and Swarm can still complete.
+    // build so mount, WASM loading, controls, and solving can still complete.
     function recoverNoWebGLBuild(self, n){
       self.N = n; self.mode = 'cubie';
       self.cubies = []; self.activeMove = null;
@@ -1522,7 +1300,7 @@ BOOT = r'''
     inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
     const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
     inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
-    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-n-input],[data-view="swarm"],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
+    const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-n-input],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
     inst.root.querySelectorAll(selector).forEach(function(el){el.disabled=true;el.setAttribute('aria-disabled','true');});
     blocked();
     return {
@@ -1560,7 +1338,7 @@ html = ('<!DOCTYPE html>\n<html lang="en">\n<head>\n'
         '<title>Solvaus Hybrid — N×N Solver Studio</title>\n'
         + helmet + '\n</head>\n<body>\n' + body + '\n'
         '<script type="module">\n'
-        "import init, { CubeLab, Swarm } from './pkg/cube_wasm.js';\n"
+        "import init, { CubeLab } from './pkg/cube_wasm.js';\n"
         + SHIM + '\n' + js + '\n' + WIRE + '\n' + BOOT + '\n</script>\n</body>\n</html>\n')
 
 out = os.path.join(_ROOT, 'web', 'index.html')

@@ -240,43 +240,6 @@ for(const [n,maxTextureSize,expectedDim] of [[48,4096,48],[512,4096,512],[1001,4
     subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
 
 
-def check_swarm_scheduler(module: str) -> None:
-    """Exercise the generated early-mount/idle Swarm scheduling state machine."""
-    match = re.search(
-        r"function scheduleSwarmReduction\(self\)\{(?P<body>.*?)\n    \}\n    if \(origSetView\)",
-        module,
-        re.DOTALL,
-    )
-    require(match is not None, "Swarm reduction scheduler missing")
-    script = f"""
-const SWARM_MAX=3, SOLVE_MAX_N=11;
-let timers=[];
-globalThis.setTimeout=(fn) => {{ timers.push(fn); return timers.length; }};
-globalThis.clearTimeout=() => {{}};
-const schedule=function(self) {{{match.group('body')}}};
-function runOne() {{ const fn=timers.shift(); if (!fn) throw new Error('expected timer'); fn(); }}
-let calls={{solve:0,scramble:0}};
-let state={{view:'swarm',n:6,busy:true,phase:'scrambling',scrambled:true,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;this.scrambled=true;}}}};
-schedule(state); runOne();
-if (calls.solve !== 0 || timers.length !== 1) throw new Error('busy pre-WASM scramble was not deferred');
-state.busy=false; runOne();
-if (calls.solve !== 1) throw new Error('idle reduction did not auto-start');
-timers=[]; calls={{solve:0,scramble:0}};
-state={{view:'swarm',n:4,busy:false,scrambled:false,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;this.scrambled=true;}}}};
-schedule(state); runOne();
-if (calls.scramble !== 1 || calls.solve !== 1) throw new Error('unscrambled Swarm did not scramble then solve');
-timers=[]; calls={{solve:0,scramble:0}};
-state={{view:'studio',n:6,busy:false,scrambled:true,_solvePending:false,solve(){{calls.solve++;}},scramble(){{calls.scramble++;}}}};
-schedule(state);
-if (timers.length || calls.solve) throw new Error('Studio view scheduled a Swarm solve');
-state.view='swarm'; state._solvePending=true; schedule(state);
-if (timers.length || calls.solve) throw new Error('pending solve was duplicated');
-state._solvePending=false; state.busy=true; state.phase='solving'; schedule(state);
-if (timers.length || calls.solve) throw new Error('verified replay scheduled a duplicate solve');
-"""
-    subprocess.run([shutil.which("node") or "node", "-e", script], check=True)
-
-
 def check_boot_recovery(module: str) -> None:
     """Execute pre-WASM state sync and no-WebGL/RAF recovery helpers."""
     sync_match = re.search(
@@ -303,10 +266,6 @@ def check_boot_recovery(module: str) -> None:
     require(build_match is not None, "no-WebGL build recovery missing")
     require(texture_match is not None, "no-WebGL texture initialization route missing")
     require(loop_match is not None, "single-RAF recovery helper missing")
-    require(
-        module.index("syncLabFromVisibleScramble(inst)") < module.index("scheduleSwarmReduction(inst)"),
-        "pre-WASM scramble must synchronize before Swarm auto-start",
-    )
     script = f"""
 const sync=function(self) {{{sync_match.group('body')}}};
 let applied=[];
@@ -463,7 +422,8 @@ def main() -> int:
     require(parser.tag_counts.get("main") == 1, "generated page must have one <main>")
     require(parser.tag_counts.get("header") == 1, "generated page must have one <header>")
     require(not parser.external_resources, f"desktop UI must be offline-only: {parser.external_resources}")
-    require({"studio-tab", "swarm-tab", "studio-panel", "swarm-panel"} <= parser.ids, "tab IDs/panels missing")
+    require("studio-panel" in parser.ids, "studio panel missing")
+    require("swarm" not in html.lower(), "Swarm must not return")
     require({"custom-algorithm", "custom-algorithm-help", "custom-algorithm-error"} <= parser.ids, "custom scramble controls missing")
     require(any(
         attrs.get("data-n-input") is not None and attrs.get("type") == "number" and attrs.get("aria-label") == "Cube size"
@@ -472,10 +432,6 @@ def main() -> int:
     require("data-phase-elapsed" not in html, "replay elapsed time must not be placed in the HUD")
     require("verifiedLane.stat.textContent" in html and "this._replayElapsedLabel" in html, "texture replay lane status missing")
 
-    tabs = [attrs for role, attrs in parser.roles if role == "tab"]
-    require(len(tabs) == 2, "Studio and Swarm must expose exactly two ARIA tabs")
-    for tab in tabs:
-        require(tab.get("aria-controls") in parser.ids, "tab aria-controls must target a real panel")
     require(any(role == "status" and attrs.get("aria-live") == "polite" for role, attrs in parser.roles), "live status missing")
     require(any(role == "progressbar" for role, _ in parser.roles), "solve progressbar semantics missing")
 
@@ -491,27 +447,18 @@ def main() -> int:
         "core.invoke('solve_stickers'",
         "invoke('cancel_solve'",
         "requestToken:requestToken",
-        "data-reduction-elapsed aria-hidden",
-        "data-reduction-start",
-        "data-reduction-cancel",
-        "data-replay-moves",
-        "data-replay-elapsed",
         "function refreshReplayActivity(self){",
         "self._replayElapsedLabel = elapsedLabel(elapsed);",
         "self.mode === 'texture'",
         "var replaying = self.busy && self.phase === 'solving' && !self._solvePending;",
         "self._replayHeartbeat = setInterval(function(){ refreshReplayActivity(self); }, 500);",
-        "replayTimer.textContent=self._replayElapsedLabel;",
         "updateReplayActivity(this);",
         "clearInterval(this._replayHeartbeat);",
         "data-native-solve-progress",
         "data-sol-time",
         "this._solveElapsedMs > 0 ? elapsedLabel(this._solveElapsedMs) : ''",
         "if (self.showSolution) self.showSolution();",
-        "Cancel playback",
         "display:none;width:100%;height:42px",
-        "Native reduction is active",
-        "RCube percentage is its stage-based estimate",
         "new coreApi.Channel()",
         "onProgress:progressChannel",
         "updateNativeSolveProgress",
@@ -556,20 +503,14 @@ def main() -> int:
         "rotatedIdx(idx, m)",
         "positionForIdx(idx)",
         "this.setSolvedPct(0)",
-        "if (inst.initSwarm) inst.initSwarm()",
         "syncLabFromVisibleScramble(inst)",
         "recoverNoWebGLBuild",
         "useTextureBuildWithoutWebGL",
         "origMountBuildCube",
         "ensureAnimationLoop(inst)",
-        "scheduleSwarmReduction(inst)",
-        "_swarmAutoStartTimer",
         "e.ctrlKey || e.metaKey || e.altKey",
-        "role=\"tab\"",
     ):
-        # role="tab" lives in HTML rather than JavaScript.
-        haystack = html if marker.startswith("role=") else module
-        require(marker in haystack, f"frontend contract marker missing: {marker}")
+        require(marker in module, f"frontend contract marker missing: {marker}")
 
     require("Math.round(np.x / this.step)" not in module, "even-N cubies must never snap to the integer-origin lattice")
     require("visualization-only" not in html.lower(), "visualization-only product mode must not return")
@@ -582,7 +523,6 @@ def main() -> int:
     check_texture_render_scaling(module)
     check_lattice_rotation(module)
     check_cubie_layer_index(module)
-    check_swarm_scheduler(module)
     check_boot_recovery(module)
     check_custom_scramble(module)
     check_scramble_lifecycle_and_boot_gate(module)
@@ -593,7 +533,7 @@ def main() -> int:
     node_check(module, ".mjs")
     node_check(worker, ".mjs")
 
-    print("frontend smoke passed: structure, accessibility, supported-size cap, custom scrambles, exact cubie lattice, Swarm startup, JS syntax, worker/native privacy")
+    print("frontend smoke passed: structure, accessibility, supported-size cap, custom scrambles, exact cubie lattice, JS syntax, worker/native privacy")
     return 0
 
 

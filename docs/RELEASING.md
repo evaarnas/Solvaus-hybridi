@@ -158,7 +158,6 @@ On each operating system:
 - solve at least one 4×4+ cube,
 - cancel an active solve or replay,
 - verify Replay,
-- verify evolutionary Swarm on 3×3,
 - verify reduction telemetry on a large supported cube,
 - confirm unsupported sizes are not offered.
 

@@ -4,7 +4,7 @@
 
 Build a replay-verified solver for every `N >= 2` that fits available memory and time. “Arbitrary N” does **not** mean mathematically unbounded input on finite hardware. Product claims must include measured resource limits and cancellation behavior.
 
-Evolutionary search is a real supplemental technique for candidate exploration and the Swarm visualization. It is not the completeness mechanism for large cubes. General solving uses deterministic reduction: centers, wing orbits, reduced 3×3, and parity correction.
+Evolutionary search is a real supplemental technique for candidate exploration. It is not the completeness mechanism for large cubes. General solving uses deterministic reduction: centers, wing orbits, reduced 3×3, and parity correction.
 
 ## Current evidence (2026-10-10)
 

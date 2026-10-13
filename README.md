@@ -12,7 +12,7 @@ Create a legal scramble, solve from the visible stickers alone, and watch the so
 Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
 
 > [!NOTE]
-> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio/Swarm UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus Hybrid combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
+> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus Hybrid combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
 
 [![Rust](https://img.shields.io/badge/core-Rust-dea584.svg)](https://www.rust-lang.org/)
 [![RCube](https://img.shields.io/badge/large--cube-engine-C%2B%2B-blue.svg)](src-tauri/rcube)
@@ -31,7 +31,6 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 - **Turn the cube yourself** with accessible face, direction, and wide-turn controls.
 - **Solve without revealing the scramble history** to the Worker or native solver.
 - **Cancel long solves or replays** without leaving the visual cube and Rust cube out of sync.
-- **Watch evolutionary computing** on real 2×2/3×3 candidate populations.
 - **Inspect truthful solver telemetry** while 4×4+ cubes are solved, including live elapsed time during solving and animation, plus a stage-based percentage estimate (desktop and browser) that does not predict remaining time.
 
 ## A 60-second tour
@@ -117,14 +116,6 @@ Evolutionary computing asks: _what if possible solutions could breed better solu
 | **Stagnation restart** | A stuck population keeps its best candidate but refreshes the rest |
 | **Convergence** | A candidate reaches a solved state |
 
-### What Swarm really shows
-
-For **2×2 and 3×3**, every card is a live evolutionary trial synchronized to the Studio cube. The cards show sticker mismatch, genome length, mutation/crossover origin, and plateau behavior. Green means that trial reached solved.
-
-The UI passes the local scramble moves to Swarm only to reconstruct the shared starting cube. Evolutionary candidates search from that resulting state; they do not receive or return a stored inverse.
-
-For **4×4 and larger**, Swarm does **not** pretend evolution is solving the cube. It switches to large-cube solver telemetry: elapsed activity, the active engine's stages, cancellation, and final replay proof.
-
 ## Solver inputs and privacy
 
 Solvaus Hybrid is local-first:
@@ -149,7 +140,7 @@ This is an implementation fairness boundary—not a cryptographic proof—but it
 
 ```mermaid
 flowchart LR
-    UI[Three.js Studio / Swarm] -->|2×2–21×21 sticker state| Worker[WASM Web Worker]
+    UI[Three.js Studio] -->|2×2–21×21 sticker state| Worker[WASM Web Worker]
     UI -->|desktop 4×4–1001×1001 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]
@@ -162,10 +153,10 @@ flowchart LR
 |---|---|
 | `crates/cube_core` | Sticker cube, legal face/wide/slice turns, scramble primitives |
 | `crates/cube_solver` | Two-phase 3×3, bounded 2×2 strategies, EC workers, browser deterministic reduction |
-| `crates/cube_wasm` | WASM bridge, Swarm population, and browser sticker-only solve boundary |
+| `crates/cube_wasm` | WASM bridge and browser sticker-only solve boundary |
 | `src-tauri/rcube` | RCube C++ engine and sticker/move bridge |
 | `src-tauri` | Native desktop shell and cancellable RCube solves |
-| `tools/design-source.txt` | Authored Studio/Swarm interface |
+| `tools/design-source.txt` | Authored Studio interface |
 | `tools/gen-index.py` | Generates `web/index.html` and wires the real solver into the interface |
 | `web/solver-worker.js` | Off-main-thread browser/WASM solving |
 | `crates/solver_lab_app` | Legacy/experimental egui frontend |
