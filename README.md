@@ -51,7 +51,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 | Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
 | Native desktop | **4×4–1001×1001** | RCube scramble and center, corner, and edge engine | Native C++ command thread |
 
-The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N. For native cubes above 21×21, the UI uses RCube's solved-state result directly. Browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
+The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N. For native cubes above 21×21, the UI uses RCube's solved-state result directly. Browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out.
 
 ### Large-cube limits
 
@@ -98,23 +98,6 @@ Choose:
 3. one of `U D L R F B`.
 
 Each press applies a real legal move to both the rendered cube and the Rust cube model. **Undo last manual turn** reverses the most recent interactive move. Applying notation starts from solved; interactive turns can be added to the current scramble.
-
-## Evolutionary-computing concepts
-
-Evolutionary computing asks: _what if possible solutions could breed better solutions?_
-
-| Concept | Meaning in Solvaus Hybrid |
-|---|---|
-| **Genome** | A candidate sequence of legal cube moves |
-| **Population** | A collection of candidate move sequences |
-| **Fitness** | Primarily how many stickers remain incorrect, with a small preference for shorter genomes in the solver-lane GA |
-| **Selection** | Tournament selection favors stronger candidates without always choosing the same parent |
-| **Mutation** | Insert, remove, or replace moves |
-| **Crossover** | Join a prefix from one candidate to a suffix from another |
-| **Island model** | Several populations explore independently instead of collapsing onto one idea |
-| **Migration** | Strong candidates occasionally move between islands |
-| **Stagnation restart** | A stuck population keeps its best candidate but refreshes the rest |
-| **Convergence** | A candidate reaches a solved state |
 
 ## Solver inputs and privacy
 
