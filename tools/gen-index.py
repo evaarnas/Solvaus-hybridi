@@ -496,6 +496,37 @@ WIRE = r'''
       refreshSolveActivity(self);
       self._solveHeartbeat = setInterval(function(){ refreshSolveActivity(self); }, 500);
     }
+    function refreshReplayActivity(self){
+      if (self._replayStartedAt == null) return;
+      if (!self.busy || self.phase !== 'solving' || self._solvePending){
+        updateReplayActivity(self);
+        return;
+      }
+      var elapsed = performance.now() - self._replayStartedAt;
+      self._replayElapsedLabel = elapsedLabel(elapsed);
+      if (self.mode === 'texture'){
+        var stat = self.root.querySelector('[data-lane="det"] [data-stat]');
+        if (stat) stat.textContent='verified · replay '+(self.movesDone||0).toLocaleString()+' / '+(self.totalMoves||0).toLocaleString()+' · elapsed '+self._replayElapsedLabel;
+      }
+      var replayTimer = self.root.querySelector('[data-replay-elapsed]');
+      if (replayTimer) replayTimer.textContent=self._replayElapsedLabel;
+    }
+    function updateReplayActivity(self){
+      var replaying = self.busy && self.phase === 'solving' && !self._solvePending;
+      if (replaying){
+        if (self._replayStartedAt == null){
+          self._replayStartedAt = performance.now();
+          clearInterval(self._replayHeartbeat);
+          refreshReplayActivity(self);
+          self._replayHeartbeat = setInterval(function(){ refreshReplayActivity(self); }, 500);
+        }
+      } else if (self._replayStartedAt != null){
+        clearInterval(self._replayHeartbeat);
+        self._replayHeartbeat = null;
+        self._replayStartedAt = null;
+        self._replayElapsedLabel = null;
+      }
+    }
     function stopSolveActivity(self){
       clearInterval(self._solveHeartbeat);
       self._solveHeartbeat = null;
@@ -851,7 +882,7 @@ WIRE = r'''
     // Re-sync the Solve/Cancel buttons on every UI state change the design makes.
     if (inst.syncControls){
       var origSyncC = inst.syncControls.bind(inst);
-      inst.syncControls = function(){ origSyncC(); updateSolveButtons(this); };
+      inst.syncControls = function(){ origSyncC(); updateSolveButtons(this); updateReplayActivity(this); };
     }
     var origUnmount = inst.componentWillUnmount ? inst.componentWillUnmount.bind(inst) : null;
     inst.componentWillUnmount = function(){
@@ -860,6 +891,7 @@ WIRE = r'''
       clearTimeout(this._fallbackTimer);
       clearTimeout(this._swarmAutoStartTimer);
       clearInterval(this._solveHeartbeat);
+      clearInterval(this._replayHeartbeat);
       if (this._solvePending && this._solveDispatch === 'native' && nativeCore()){
         nativeCore().invoke('cancel_solve', { requestToken:this._solveRequestToken }).catch(function(){});
       }
@@ -973,7 +1005,7 @@ WIRE = r'''
                 '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel solve</button>';
             } else if (replaying){
               msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ '+(nativeRcube?'RCube reports solved — replaying':'Verified solution is replaying')+'</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +
-                '<div data-replay-moves style="font-size:12px;color:#6F756A;">0 / '+this.totalMoves+' animation steps</div>'+
+                '<div style="font-size:12px;color:#6F756A;"><span data-replay-moves>0 / '+this.totalMoves+' animation steps</span> · elapsed <span data-replay-elapsed aria-hidden="true">0s</span></div>'+
                 '<button type="button" data-reduction-cancel style="margin-top:16px;padding:9px 13px;border:1px solid #E6C9C9;border-radius:10px;background:#FCF1F1;color:#A23B3B;font-weight:600;cursor:pointer;">Cancel playback</button>';
             } else if (telem && telem.n === n && telem.verified){
               msg.innerHTML = '<div style="color:#1B8A45;font-weight:650;">✓ Replay-verified solver result</div><div style="font-size:22px;font-weight:650;color:#262622;margin-top:10px;">'+telem.moveCount+' moves · '+elapsedLabel(telem.elapsedMs)+'</div>' + pipeline +

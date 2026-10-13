@@ -32,7 +32,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 - **Solve without revealing the scramble history** to the Worker or native solver.
 - **Cancel long solves or replays** without leaving the visual cube and Rust cube out of sync.
 - **Watch evolutionary computing** on real 2×2/3×3 candidate populations.
-- **Inspect truthful solver telemetry** while 4×4+ cubes are solved, including a stage-based percentage estimate (desktop and browser) that does not predict remaining time.
+- **Inspect truthful solver telemetry** while 4×4+ cubes are solved, including live elapsed time during solving and animation, plus a stage-based percentage estimate (desktop and browser) that does not predict remaining time.
 
 ## A 60-second tour
 

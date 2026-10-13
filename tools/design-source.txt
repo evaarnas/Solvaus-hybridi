@@ -775,7 +775,7 @@ class Component extends DCLogic {
         verifiedLane.fill.style.width = '100%';
         verifiedLane.pct.textContent = '100%';
         verifiedLane.pct.style.color = '#1BA64B';
-        verifiedLane.stat.textContent = `verified · replay ${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}`;
+        verifiedLane.stat.textContent = `verified · replay ${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}${this._replayElapsedLabel ? ' · elapsed ' + this._replayElapsedLabel : ''}`;
         verifiedLane.star.style.display = 'inline';
       }
       this.ui.status.textContent = 'Replaying verified RCube solution';

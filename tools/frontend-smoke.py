@@ -469,6 +469,8 @@ def main() -> int:
         attrs.get("data-n-input") is not None and attrs.get("type") == "number" and attrs.get("aria-label") == "Cube size"
         for attrs in parser.inputs
     ), "direct cube-size number field missing or inaccessible")
+    require("data-phase-elapsed" not in html, "replay elapsed time must not be placed in the HUD")
+    require("verifiedLane.stat.textContent" in html and "this._replayElapsedLabel" in html, "texture replay lane status missing")
 
     tabs = [attrs for role, attrs in parser.roles if role == "tab"]
     require(len(tabs) == 2, "Studio and Swarm must expose exactly two ARIA tabs")
@@ -493,6 +495,15 @@ def main() -> int:
         "data-reduction-start",
         "data-reduction-cancel",
         "data-replay-moves",
+        "data-replay-elapsed",
+        "function refreshReplayActivity(self){",
+        "self._replayElapsedLabel = elapsedLabel(elapsed);",
+        "self.mode === 'texture'",
+        "var replaying = self.busy && self.phase === 'solving' && !self._solvePending;",
+        "self._replayHeartbeat = setInterval(function(){ refreshReplayActivity(self); }, 500);",
+        "replayTimer.textContent=self._replayElapsedLabel;",
+        "updateReplayActivity(this);",
+        "clearInterval(this._replayHeartbeat);",
         "data-native-solve-progress",
         "data-sol-time",
         "this._solveElapsedMs > 0 ? elapsedLabel(this._solveElapsedMs) : ''",
