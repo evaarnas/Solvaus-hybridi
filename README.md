@@ -3,16 +3,16 @@
 
 # Solvaus Hybrid
 
-**A local-first N×N cube solver combining RCube's large-cube engine with Cube-Solver's live Three.js animation and Rust verification.**
+**A local-first N×N cube solver combining RCube's large-cube engine with Cube-Solver's live Three.js animation.**
 
-Create a legal scramble, solve from the visible stickers alone, and watch the verified solution animate on the 3D cube.
+Create a legal scramble, solve from the visible stickers alone, and watch the solution animate on the 3D cube.
 
 <img src="docs/images/studio-1001.png" width="760" alt="Solvaus Hybrid studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
 
 Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
 
 > [!NOTE]
-> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio/Swarm UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus Hybrid combines the two, adds the Tauri desktop bridge with Rust replay verification, larger supported sizes, and solve-progress estimates.
+> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio/Swarm UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus Hybrid combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
 
 [![Rust](https://img.shields.io/badge/core-Rust-dea584.svg)](https://www.rust-lang.org/)
 [![RCube](https://img.shields.io/badge/large--cube-engine-C%2B%2B-blue.svg)](src-tauri/rcube)
@@ -20,7 +20,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 </div>
 
 > [!IMPORTANT]
-> **Solvaus Hybrid only offers sizes it can solve and replay-verify.**
+> **Solvaus Hybrid offers sizes supported by its solver and renderer.**
 > The native desktop app supports **2×2–1001×1001**; the standalone browser supports **2×2–21×21**. Browser solves from 9×9 to 21×21 may take up to 10 minutes; desktop solves remain bounded by a five-minute deadline. Both can be cancelled.
 
 ## What you can do
@@ -40,8 +40,8 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 2. **Create the state.** Press **Scramble**, enter an algorithm, or turn faces manually.
 3. **Press Solve.** The solver receives the complete sticker-color state—not the scramble sequence.
 4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–21×21 solves use bounded WASM reduction, while desktop uses the cancellable native RCube engine.
-5. **Verify and replay.** Solver moves are replayed by the Rust cube model and accepted only when the cube is solved.
-6. **Watch the 3D animation.** The existing Cube-Solver renderer animates the verified move sequence in real time.
+5. **Replay the solution.** Smaller cubes replay solver moves through the cube model; native cubes above 21×21 use RCube's solved-state result.
+6. **Watch the 3D animation.** The existing Cube-Solver renderer animates the returned move sequence in real time.
 
 ## What solves each cube?
 
@@ -50,9 +50,9 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 | Browser + desktop | **2×2** | Bounded meet-in-the-middle, beam, and island-GA strategies; shortest verified candidate wins | WASM Worker |
 | Browser + desktop | **3×3** | Two-phase Kociemba-style search | WASM Worker |
 | Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
-| Native desktop | **4×4–1001×1001** | RCube scramble and center, corner, and edge engine | Native C++ command thread + Rust replay verification |
+| Native desktop | **4×4–1001×1001** | RCube scramble and center, corner, and edge engine | Native C++ command thread |
 
-The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N; browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and independent replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
+The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N. For native cubes above 21×21, the UI uses RCube's solved-state result directly. Browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out. Evolutionary search remains educational and supplemental rather than the completeness mechanism.
 
 ### Large-cube limits
 
@@ -115,7 +115,7 @@ Evolutionary computing asks: _what if possible solutions could breed better solu
 | **Island model** | Several populations explore independently instead of collapsing onto one idea |
 | **Migration** | Strong candidates occasionally move between islands |
 | **Stagnation restart** | A stuck population keeps its best candidate but refreshes the rest |
-| **Convergence** | A candidate reaches a solved, replay-verified state |
+| **Convergence** | A candidate reaches a solved state |
 
 ### What Swarm really shows
 
@@ -125,7 +125,7 @@ The UI passes the local scramble moves to Swarm only to reconstruct the shared s
 
 For **4×4 and larger**, Swarm does **not** pretend evolution is solving the cube. It switches to large-cube solver telemetry: elapsed activity, the active engine's stages, cancellation, and final replay proof.
 
-## Verification and privacy
+## Solver inputs and privacy
 
 Solvaus Hybrid is local-first:
 
@@ -141,7 +141,7 @@ For normal Studio solves, the Worker or Tauri command receives:
 N + exactly 6 × N² sticker-color values
 ```
 
-It does **not** receive the scramble sequence. Returned moves are replayed from the original state, and success is reported only if replay reaches solved.
+It does **not** receive the scramble sequence. Browser and smaller native-cube paths replay returned moves from the original state. Native texture-rendered cubes above 21×21 use RCube's solved-state result directly.
 
 This is an implementation fairness boundary—not a cryptographic proof—but it prevents the normal solver path from simply reading and reversing a hidden scramble history.
 
@@ -153,9 +153,9 @@ flowchart LR
     UI -->|desktop 4×4–1001×1001 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]
-    RCube -->|move sequence| Verify[cube_core replay verification]
-    Core --> Verify
-    Verify --> UI
+    RCube -->|move sequence (through 21×21)| Core
+    RCube -->|solved-state result (>21×21)| UI
+    Core --> UI
 ```
 
 | Path | Responsibility |
@@ -164,7 +164,7 @@ flowchart LR
 | `crates/cube_solver` | Two-phase 3×3, bounded 2×2 strategies, EC workers, browser deterministic reduction |
 | `crates/cube_wasm` | WASM bridge, Swarm population, and browser sticker-only solve boundary |
 | `src-tauri/rcube` | RCube C++ engine and sticker/move bridge |
-| `src-tauri` | Native desktop shell, cancellable RCube solves, and Rust replay verification |
+| `src-tauri` | Native desktop shell and cancellable RCube solves |
 | `tools/design-source.txt` | Authored Studio/Swarm interface |
 | `tools/gen-index.py` | Generates `web/index.html` and wires the real solver into the interface |
 | `web/solver-worker.js` | Off-main-thread browser/WASM solving |
