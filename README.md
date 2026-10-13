@@ -153,8 +153,8 @@ flowchart LR
     UI -->|desktop 4×4–1001×1001 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]
-    RCube -->|move sequence (through 21×21)| Core
-    RCube -->|solved-state result (>21×21)| UI
+    RCube -->|"move sequence (through 21×21)"| Core
+    RCube -->|"solved-state result (above 21×21)"| UI
     Core --> UI
 ```
 
