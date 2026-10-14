@@ -482,7 +482,7 @@ def main() -> int:
         "self._textureReplayMoves = textureReplayMoves;",
         "self.texProg = 0;\n        self._textureDrawBucket = -1;",
         "this.lab.apply_design_move(move.axis, move.layer, direction);",
-        "Replaying verified RCube solution",
+        "'Replaying verified ' + (winnerIsGullicube ? 'Gullicube' : 'RCube') + ' solution'",
         "Verified replay failed — cube state mismatch",
         "this.renderTextureFromLab();",
         "self.lab.reset();",

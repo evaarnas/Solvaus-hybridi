@@ -784,7 +784,8 @@ class Component extends DCLogic {
       this.setSolvedPct(frac);
       this.ui.count.textContent = `${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}`;
       this.ui.move.style.display = 'none';
-      const verifiedLane = this.lanes.det;
+      const winnerIsGullicube = this.realWinner === 'gullicube';
+      const verifiedLane = this.lanes[winnerIsGullicube ? 'beam' : 'det'];
       if (verifiedLane) {
         verifiedLane.fill.style.width = '100%';
         verifiedLane.pct.textContent = '100%';
@@ -792,7 +793,7 @@ class Component extends DCLogic {
         verifiedLane.stat.textContent = `verified · replay ${this.movesDone.toLocaleString()} / ${this.totalMoves.toLocaleString()}${this._replayElapsedLabel ? ' · elapsed ' + this._replayElapsedLabel : ''}`;
         verifiedLane.star.style.display = 'inline';
       }
-      this.ui.status.textContent = 'Replaying verified RCube solution';
+      this.ui.status.textContent = 'Replaying verified ' + (winnerIsGullicube ? 'Gullicube' : 'RCube') + ' solution';
       if (this._textureReplayIndex >= this._textureReplayMoves.length &&
           this.movesDone >= this.totalMoves) this.onPhaseComplete();
       return;

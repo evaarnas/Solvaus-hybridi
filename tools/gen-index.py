@@ -514,7 +514,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       var elapsed = performance.now() - self._replayStartedAt;
       self._replayElapsedLabel = elapsedLabel(elapsed);
       if (self.mode === 'texture'){
-        var stat = self.root.querySelector('[data-lane="det"] [data-stat]');
+        var stat = self.root.querySelector('[data-lane="' + (self.realWinner === 'gullicube' ? 'beam' : 'det') + '"] [data-stat]');
         if (stat) stat.textContent='verified · replay '+(self.movesDone||0).toLocaleString()+' / '+(self.totalMoves||0).toLocaleString()+' · elapsed '+self._replayElapsedLabel;
       }
     }
