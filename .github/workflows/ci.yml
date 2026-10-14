@@ -57,7 +57,7 @@ jobs:
         run: cargo test -p cube_solver --features reduction
 
       - name: WASM solver core compiles (wasm32)
-        run: cargo build -p cube_wasm --target wasm32-unknown-unknown
+        run: cargo build -p cube_wasm --lib --target wasm32-unknown-unknown
 
       - name: Release build
         run: cargo build --release --workspace
