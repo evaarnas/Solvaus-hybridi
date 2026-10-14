@@ -739,7 +739,7 @@ class Component extends DCLogic {
     for (let i = 0, len = list.length; i < len; i++) {
       const turns = Array.isArray(list) ? list[i].turns : ((list[i] >> 18) & 7) - 2;
       const amount = ((turns % 4) + 4) % 4;
-      total += amount === 2 ? 2 : amount === 0 ? 0 : 1;
+      total += amount === 0 ? 0 : 1;
     }
     return total;
   }
@@ -757,19 +757,17 @@ class Component extends DCLogic {
       while (this.movesDone < target && performance.now() - started < 5) {
         const move = this.textureReplayMoveAt(this._textureReplayIndex);
         if (!move) break;
-        if (!this._textureReplayTurnsLeft) {
-          const amount = ((move.turns % 4) + 4) % 4;
-          if (amount === 0) {
-            this._textureReplayIndex++;
-            continue;
-          }
-          this._textureReplayTurnsLeft = amount === 2 ? 2 : 1;
-          this._textureReplayDirection = amount === 3 ? -1 : 1;
+        const amount = ((move.turns % 4) + 4) % 4;
+        if (amount === 0) {
+          this._textureReplayIndex++;
+          continue;
         }
-        this.lab.apply_design_move(move.axis, move.layer, this._textureReplayDirection);
+        const direction = amount === 3 ? -1 : 1;
+        for (let rep = amount === 2 ? 2 : 1; rep > 0; rep--) {
+          this.lab.apply_design_move(move.axis, move.layer, direction);
+        }
         this.movesDone++;
-        this._textureReplayTurnsLeft--;
-        if (!this._textureReplayTurnsLeft) this._textureReplayIndex++;
+        this._textureReplayIndex++;
       }
       const frac = this.totalMoves ? this.movesDone / this.totalMoves : 1;
       // Redraw on a time budget, not a handful of progress buckets: huge cubes

@@ -481,7 +481,7 @@ def main() -> int:
         "return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};",
         "self._textureReplayMoves = textureReplayMoves;",
         "self.texProg = 0;\n        self._textureDrawBucket = -1;",
-        "this.lab.apply_design_move(move.axis, move.layer, this._textureReplayDirection);",
+        "this.lab.apply_design_move(move.axis, move.layer, direction);",
         "Replaying verified RCube solution",
         "Verified replay failed — cube state mismatch",
         "this.renderTextureFromLab();",

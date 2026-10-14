@@ -811,7 +811,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           for (var ti=0, tl=packedMoves.length; ti<tl; ti++){
             var pv=packedMoves[ti], tt=((pv>>18)&7)-2, pa=(pv>>16)&3, pl=pv&0xFFFF;
             if (!(pa<=2&&pl<texN&&(tt===1||tt===-1||tt===2))){ validTexturePath=false; break; }
-            totalTurns+=tt===2?2:1;
+            totalTurns+=1;
           }
         } else {
           textureReplayMoves = res.moves.map(function(m){
@@ -824,7 +824,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           });
           totalTurns=textureReplayMoves.reduce(function(total, m){
             var amount=((m.turns%4)+4)%4;
-            return total+(amount===2?2:amount===0?0:1);
+            return total+(amount===0?0:1);
           },0);
         }
         if(!validTexturePath){
