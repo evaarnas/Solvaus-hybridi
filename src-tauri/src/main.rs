@@ -791,6 +791,7 @@ mod tests {
 
         let mut replay = cube_wasm::CubeLab::new(n);
         assert!(replay.load_face_colors(&colors));
+        #[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
         for chunk in result[9..].chunks_exact(4) {
             let packed = u32::from_le_bytes(chunk.try_into().unwrap());
             let layer = (packed & 0xFFFF) as usize;
