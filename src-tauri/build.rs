@@ -201,19 +201,32 @@ fn build_gullicube() {
         println!("cargo:warning=could not update {} ({error}); close the running app and rebuild", exe.display());
     }
 
-    let data_out = profile_dir.join("data");
-    if std::fs::create_dir_all(&data_out).is_ok() {
-        if let Ok(entries) = std::fs::read_dir(root.join("data")) {
-            for entry in entries.flatten() {
-                let target = data_out.join(entry.file_name());
-                let up_to_date = target
-                    .metadata()
-                    .ok()
-                    .zip(entry.metadata().ok())
-                    .is_some_and(|(a, b)| a.len() == b.len());
-                if !up_to_date {
-                    let _ = std::fs::copy(entry.path(), target);
-                }
+    copy_data(&root.join("data"), &profile_dir.join("data"));
+
+    // Stage the executable and data for the installer (see bundle.resources).
+    let stage = Path::new(BUNDLE_STAGE);
+    if std::fs::create_dir_all(stage).is_ok() {
+        let _ = std::fs::copy(&built, stage.join(exe_name));
+        copy_data(&root.join("data"), &stage.join("data"));
+    }
+}
+
+const BUNDLE_STAGE: &str = "gullicube-bundle";
+
+fn copy_data(from: &Path, to: &Path) {
+    if std::fs::create_dir_all(to).is_err() {
+        return;
+    }
+    if let Ok(entries) = std::fs::read_dir(from) {
+        for entry in entries.flatten() {
+            let target = to.join(entry.file_name());
+            let up_to_date = target
+                .metadata()
+                .ok()
+                .zip(entry.metadata().ok())
+                .is_some_and(|(a, b)| a.len() == b.len());
+            if !up_to_date {
+                let _ = std::fs::copy(entry.path(), target);
             }
         }
     }
@@ -223,6 +236,9 @@ fn main() {
     assert_frontend_is_fresh();
     assert_packaged_style_policy();
     build_rcube();
+    // The bundle resource directory must exist even when Gullicube cannot be built.
+    let _ = std::fs::create_dir_all(BUNDLE_STAGE);
+    let _ = std::fs::write(Path::new(BUNDLE_STAGE).join("README.txt"), "Staged by build.rs\n");
     build_gullicube();
     tauri_build::build()
 }

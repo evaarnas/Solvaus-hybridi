@@ -43,6 +43,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "gullicube-bundle/": "gullicube/"
+    },
     "category": "Education",
     "shortDescription": "Replay-verified N×N cube solver studio",
     "longDescription": "Build random or custom 2×2–11×11 scrambles, solve with RCube on desktop or Rust/WASM in the browser, replay every accepted path, and watch the verified moves animate in 3D."
