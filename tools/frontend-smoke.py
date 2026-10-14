@@ -203,7 +203,7 @@ def check_texture_render_scaling(module: str) -> None:
         module,
     )
     match = re.search(
-        r"textureSnapshotCount\(\) \{(?P<body>.*?)\n  \}\n\n  advanceTexture",
+        r"textureSnapshotCount\(\) \{(?P<body>.*?)\n  \}\n\n(?:  //[^\n]*\n)*  textureReplayMoveAt",
         module,
         re.DOTALL,
     )
@@ -463,7 +463,7 @@ def main() -> int:
         "onProgress:progressChannel",
         "updateNativeSolveProgress",
         "estimateName + ' estimated solve progress '",
-        "estimateName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed)",
+        "laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed)",
         "var SOLVE_MAX_N = nativeCore() ? 1001 : 21",
         "function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= SOLVE_MAX_N; }",
         "core.invoke('scramble_rcube'",
@@ -477,7 +477,7 @@ def main() -> int:
         "self.setN(self.sliderToN(Number(value)))",
         "return n > (self.RENDER_CUBIE_MAX || self.CUBIE_MAX || 11)",
         "function syncTextureFromLab(self)",
-        "res.solvedByRcube&&res.compactMoves&&self.mode==='texture'&&self.n>21",
+        "res.solvedByRcube&&res.compactMoves&&self.mode==='texture'",
         "return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};",
         "self._textureReplayMoves = textureReplayMoves;",
         "self.texProg = 0;\n        self._textureDrawBucket = -1;",
@@ -487,7 +487,7 @@ def main() -> int:
         "this.renderTextureFromLab();",
         "self.lab.reset();",
         "this._textureDrawBucket = drawBucket;",
-        "Math.floor(frac * Math.min(this.totalMoves, this.textureSnapshotCount()))",
+        "Math.floor(this.texProg * this.textureSnapshotCount())",
         "const d = Math.min(N, maxTextureSize, 512);",
         "scr: new Uint8Array(d * d)",
         "const pixels = face.image.data, palette = face.palette;",

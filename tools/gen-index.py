@@ -35,13 +35,12 @@ SHIM = r'''
   }
 '''
 
-WIRE = r'''
-  // ===== wire the real Rust solver (WASM) into the design =====
+WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
   function wireRealSolver(inst){
     // Engine id -> lane slot. The 3×3 is solved by the two-phase (Kociemba) solver,
     // which reuses the first ('det') lane slot — relabeled "Two-phase" for N=3 by
     // applyEngineLabels(), with the other two lanes hidden (they only run for 2×2).
-    const KEYS = { deterministic:'det', beam:'beam', evolution:'evo', kociemba:'det', reduction:'det', rcube:'det' };
+    const KEYS = { deterministic:'det', beam:'beam', evolution:'evo', kociemba:'det', reduction:'det', rcube:'det', gullicube:'beam' };
     const origScramble = inst.scramble.bind(inst);
     const origReset = inst.resetSolved ? inst.resetSolved.bind(inst) : null;
     const origSetN = inst.setN ? inst.setN.bind(inst) : null;
@@ -52,6 +51,8 @@ WIRE = r'''
     const sd = inst.root.querySelector('[data-scramble]'); if (sd) sd.value = 200;
     const sdv = inst.root.querySelector('[data-scramble-val]'); if (sdv) sdv.textContent = '200';
 
+    function engineName(id){ return id==='gullicube' ? 'Gullicube' : 'RCube'; }
+    function isNativeWinner(w){ return w==='rcube'||w==='gullicube'; }
     function lanesUpdate(self, lanes, winnerKey, moves){
       ['det','beam','evo'].forEach(k=>{
         const el = self.root.querySelector('[data-lane="'+k+'"]'); if(!el) return;
@@ -66,7 +67,7 @@ WIRE = r'''
         const p = isWin?100:Math.max(0,Math.min(100,(L.pct|0)));
         if(fill) fill.style.width = p+'%';
         if(pct){ pct.textContent = p+'%'; pct.style.color = (L.solved||isWin)?'#1BA64B':''; }
-        if (stat) stat.textContent = isWin ? ('RCube solved · '+moves+' moves') : (L.solved?'solved':(L.label||'searching…'));
+        if (stat) stat.textContent = isWin ? (engineName(L.id)+' solved · '+moves+' moves'+((lanes||[]).length>1&&L.label?' — '+L.label.replace(/^[^:]*: /,''):'')) : (L.solved?(L.label||'solved'):(L.label||'searching…'));
         if(star) star.style.display = isWin ? 'inline' : 'none';
       });
     }
@@ -105,10 +106,10 @@ WIRE = r'''
       if (!rebuildFromScrambleHistory(this)) return;
       if (this.mode==='texture'){
         this.scrambled=true;
-        if (this.realWinner==='rcube'&&this.lastSolution&&this.lastSolution.length){
-          this._textureReplayMoves=this.lastSolution.map(function(m){
+        if (isNativeWinner(this.realWinner)&&this.lastSolution&&this.lastSolution.length){
+          this._textureReplayMoves=Array.isArray(this.lastSolution)?this.lastSolution.map(function(m){
             return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
-          });
+          }):this.lastSolution;
         }
         this.solveTexture();
         if(this.ui&&this.ui.status)this.ui.status.textContent='Replaying verified solution';
@@ -393,7 +394,7 @@ WIRE = r'''
         if (btn){ var o = btn.innerHTML; btn.innerHTML = '<span style="font-size:12px;color:#1BA64B;">Copied ✓</span>'; setTimeout(function(){ btn.innerHTML = o; }, 1400); }
         return;
       }
-      if (this.mode==='texture'&&this.realWinner==='rcube'&&this.hasSolution){
+      if (this.mode==='texture'&&isNativeWinner(this.realWinner)&&this.hasSolution){
         if(this.ui&&this.ui.status)this.ui.status.textContent='The verified move sequence was replayed; notation is omitted for this large cube.';
         return;
       }
@@ -434,7 +435,8 @@ WIRE = r'''
                    self._solveDispatch === 'worker' ? 'WASM solver' : 'Solver';
       var estimatedProgress = (self._solveDispatch === 'native' || self._solveDispatch === 'worker') &&
         Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null;
-      var estimateName = self._solveDispatch === 'native' ? 'RCube' : 'WASM reduction';
+      var pickedSolver = self._solveDispatch === 'native' ? currentSolver(self) : '';
+      var estimateName = self._solveDispatch === 'native' ? (pickedSolver === 'gullicube' ? 'Gullicube' : pickedSolver === 'competition' ? 'RCube + Gullicube' : 'RCube') : 'WASM reduction';
       var statusKey = engine+':'+self.n+':'+(estimatedProgress === null ? 'active' : estimatedProgress);
       if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
         self._solveStatusKey = statusKey;
@@ -449,7 +451,9 @@ WIRE = r'''
       }
       if (badge){ badge.style.display='inline-block'; badge.textContent=elapsedLabel(elapsed); }
       var travel = self.reducedMotion ? 0 : ((Math.floor(elapsed/500)%4) * 80);
-      var lane = self.root.querySelector('[data-lane="det"]');
+      solveLaneKeys(self).forEach(function(laneKey){
+      var laneName = (pickedSolver === 'competition') ? (laneKey === 'beam' ? 'Gullicube' : 'RCube') : estimateName;
+      var lane = self.root.querySelector('[data-lane="'+laneKey+'"]');
       if (lane){
         var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
         if (estimatedProgress === null){
@@ -459,12 +463,13 @@ WIRE = r'''
           if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
         } else {
           lane.setAttribute('aria-valuenow', String(estimatedProgress));
-          lane.setAttribute('aria-valuetext', estimateName + ' estimated solve progress ' + estimatedProgress + '%');
-          if (stat) stat.textContent = estimateName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + estimatedProgress + '%');
+          if (stat) stat.textContent = laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
           if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
         }
       }
+      });
       var progress=self.root.querySelector('[data-progress]');
       if (progress){
         if (estimatedProgress === null){
@@ -477,6 +482,11 @@ WIRE = r'''
           progress.style.width=estimatedProgress+'%'; progress.style.transform='none'; progress.style.transition='width .25s linear';
         }
       }
+    }
+    // Lanes that show live progress: the selected native engine(s) only.
+    function solveLaneKeys(self){
+      var pick = self._solveDispatch === 'native' ? currentSolver(self) : 'rcube';
+      return pick === 'gullicube' ? ['beam'] : pick === 'competition' ? ['det','beam'] : ['det'];
     }
     function updateNativeSolveProgress(self, requestToken, payload){
       if (!self._solvePending || (self._solveDispatch !== 'native' && self._solveDispatch !== 'worker') ||
@@ -531,11 +541,36 @@ WIRE = r'''
       self._solveElapsedMs = self._solveStartedAt ? performance.now() - self._solveStartedAt : 0;
       self._solveStatusKey = null;
       var badge=self.root.querySelector('[data-solve-elapsed]'); if (badge) badge.style.display='none';
-      var lane=self.root.querySelector('[data-lane="det"]');
-      if (lane){ lane.removeAttribute('aria-valuetext'); var fill=lane.querySelector('[data-fill]'); if(fill){ fill.style.opacity='1'; fill.style.transform='none'; } }
+      ['det','beam'].forEach(function(k){
+        var lane=self.root.querySelector('[data-lane="'+k+'"]');
+        if (lane){ lane.removeAttribute('aria-valuetext'); var fill=lane.querySelector('[data-fill]'); if(fill){ fill.style.opacity='1'; fill.style.transform='none'; } }
+      });
       var progress=self.root.querySelector('[data-progress]');
       if (progress){ progress.removeAttribute('aria-valuetext'); progress.style.transform='none'; progress.style.transition='width .12s linear'; progress.style.width='0%'; progress.setAttribute('aria-valuenow','0'); }
     }
+    // The native solver returns raw bytes: tag 0 = UTF-8 JSON, tag 1 = packed
+    // large-cube result (u32 moveCount, u32 packedCount, then packed u32 moves).
+    // onSolveResult expects a JSON string or an already-built result object.
+    function decodeNativeSolveResult(raw){
+      var bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : (ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : null);
+      if (!bytes) return raw;
+      if (bytes[0] === 0) return new TextDecoder().decode(bytes.subarray(1));
+      var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      var moveCount = view.getUint32(1, true), packedCount = view.getUint32(5, true);
+      var packed = new Uint32Array(packedCount);
+      new Uint8Array(packed.buffer).set(bytes.subarray(9, 9 + packedCount * 4));
+      var meta = null, metaStart = 9 + packedCount * 4;
+      if (bytes.length > metaStart){
+        try { meta = JSON.parse(new TextDecoder().decode(bytes.subarray(metaStart))); } catch(e){ meta = null; }
+      }
+      return {
+        found:true, solvedByRcube:true, compactMoves:true, winner:(meta&&meta.winner)||'rcube', moveCount:moveCount,
+        moves:packed, notation:[],
+        elapsedMs: meta ? meta.elapsedMs : undefined,
+        lanes:(meta&&meta.lanes)||[{id:'rcube',pct:100,moveCount:moveCount,label:'RCube center and edge reduction',solved:true}]
+      };
+    }
+    function currentSolver(self){ var s=self.root.querySelector('[data-solver-select]'); return s&&s.value||'rcube'; }
     function postNativeSolve(self){
       var core = nativeCore();
       if (!core || !self._solvePending || self._solveDispatch) return false;
@@ -557,9 +592,9 @@ WIRE = r'''
         updateNativeSolveProgress(self, requestToken, payload);
       };
       core.invoke('solve_stickers', {
-        requestToken:requestToken, n:self.n, colors:colors, onProgress:progressChannel
+        requestToken:requestToken, n:self.n, colors:colors, solver:currentSolver(self), onProgress:progressChannel
       }).then(function(result){
-        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:result });
+        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:decodeNativeSolveResult(result) });
       }).catch(function(error){
         onSolveResult(self, { type:'result', jobId:jobId, ok:false, error:String(error) });
       });
@@ -735,8 +770,11 @@ WIRE = r'''
       self._solveDispatch = null;
       showCancel(self, false);
       var res = null;
-      if (data && data.ok){ try { res = JSON.parse(data.result); } catch(e){} }
-      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture'&&self.n>21);
+      if (data && data.ok){
+        if (typeof data.result === 'string'){ try { res = JSON.parse(data.result); } catch(e){} }
+        else res = data.result;
+      }
+      var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture');
       if (!res || !res.found || !res.moves || !res.moves.length){
         self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
@@ -766,14 +804,29 @@ WIRE = r'''
       }
       var textureReplayMoves = null;
       if (self.mode === 'texture') {
-        textureReplayMoves = res.moves.map(function(m){
-          return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
-        });
-        var validTexturePath=textureReplayMoves.every(function(m){
-          return Number.isInteger(m.axis)&&m.axis>=0&&m.axis<=2&&
-            Number.isInteger(m.layer)&&m.layer>=0&&m.layer<self.n&&
-            Number.isInteger(m.turns)&&[-2,-1,1,2].indexOf(m.turns)>=0;
-        });
+        var texN=self.n, totalTurns=0, validTexturePath=true;
+        if (compactNativeTextureResult){
+          textureReplayMoves = res.moves;
+          var packedMoves = res.moves;
+          for (var ti=0, tl=packedMoves.length; ti<tl; ti++){
+            var pv=packedMoves[ti], tt=((pv>>18)&7)-2, pa=(pv>>16)&3, pl=pv&0xFFFF;
+            if (!(pa<=2&&pl<texN&&(tt===1||tt===-1||tt===2))){ validTexturePath=false; break; }
+            totalTurns+=tt===2?2:1;
+          }
+        } else {
+          textureReplayMoves = res.moves.map(function(m){
+            return {axis:m.axis,layer:m.layer,turns:Number.isInteger(m.turns)?m.turns:m.dir};
+          });
+          validTexturePath=textureReplayMoves.every(function(m){
+            return Number.isInteger(m.axis)&&m.axis>=0&&m.axis<=2&&
+              Number.isInteger(m.layer)&&m.layer>=0&&m.layer<texN&&
+              Number.isInteger(m.turns)&&[-2,-1,1,2].indexOf(m.turns)>=0;
+          });
+          totalTurns=textureReplayMoves.reduce(function(total, m){
+            var amount=((m.turns%4)+4)%4;
+            return total+(amount===2?2:amount===0?0:1);
+          },0);
+        }
         if(!validTexturePath){
           rebuildFromScrambleHistory(self);
           self._lastSolveTelemetry={n:self.n,elapsedMs:elapsedMs,verified:false,error:'RCube returned an invalid replay path'};
@@ -803,10 +856,7 @@ WIRE = r'''
         self._textureReplayMoves = textureReplayMoves;
         self._textureReplayIndex = 0;
         self._textureReplayTurnsLeft = 0;
-        self.totalMoves = textureReplayMoves.reduce(function(total, m){
-          var amount=((m.turns%4)+4)%4;
-          return total+(amount===2?2:amount===0?0:1);
-        },0);
+        self.totalMoves = totalTurns;
         self.texProg = 0;
         self._textureDrawBucket = -1;
       } else {
@@ -814,7 +864,7 @@ WIRE = r'''
       }
       self.phase = 'solving'; self.busy = true;
       if (self.showSolution) self.showSolution();
-      if (self.ui && self.ui.status) self.ui.status.textContent = 'RCube reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
+      if (self.ui && self.ui.status) self.ui.status.textContent = engineName(res.winner) + ' reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
     }
@@ -864,6 +914,8 @@ WIRE = r'''
         solveBtn.style.pointerEvents = solving ? 'none' : 'auto';
         solveBtn.style.cursor = solving ? 'default' : 'pointer';
       }
+      var ss = self.root.querySelector('[data-solver-select]');
+      if (ss) ss.disabled = solving;
       var cb = self.root.querySelector('[data-cancel-solve]');
       if (cb){
         cb.disabled = !solving;
@@ -1141,10 +1193,18 @@ WIRE = r'''
       var reduction = (n >= 4 && n <= SOLVE_MAX_N);
       var nativeRcube = reduction && hasNativeReduction(self);
       var singleEngine = twoPhase || reduction;
+      var solverSel = self.root.querySelector('[data-solver-select]');
+      if (solverSel && solverSel._wrap) solverSel._wrap.style.display = nativeRcube ? '' : 'none';
+      var pick = nativeRcube && solverSel ? solverSel.value : 'rcube';
+      var showDet = !(nativeRcube && pick === 'gullicube');
+      var showBeam = nativeRcube && pick !== 'rcube';
       // Hide non-running lanes whenever a dedicated complete solver owns the size.
-      ['beam','evo'].forEach(function(k){
-        var el = self.root.querySelector('[data-lane="'+k+'"]'); if (el) el.style.display = singleEngine ? 'none' : '';
-      });
+      var detLane = self.root.querySelector('[data-lane="det"]'); if (detLane) detLane.style.display = showDet ? '' : 'none';
+      var beamLane = self.root.querySelector('[data-lane="beam"]'); if (beamLane) beamLane.style.display = showBeam ? '' : (singleEngine ? 'none' : '');
+      var evoLane = self.root.querySelector('[data-lane="evo"]'); if (evoLane) evoLane.style.display = singleEngine ? 'none' : '';
+      var beamLab = laneLabelEl(beamLane);
+      if (beamLab && showBeam) beamLab.textContent = 'Gullicube large-cube engine';
+      else if (beamLab && self._origLane) beamLab.textContent = self._origLane.beam.label;
       var detEl = self.root.querySelector('[data-lane="det"]');
       var detLab = laneLabelEl(detEl);
       var detDesc = detEl && detEl.querySelector('[data-lane-desc]');
@@ -1160,7 +1220,7 @@ WIRE = r'''
           : 'Searches forward from the scrambled state and backward from solved until the paths meet — exact & shortest.';
       var head = self.root.querySelector('[data-race-head]');
       var sub = self.root.querySelector('[data-race-sub]');
-      if (head) head.textContent = twoPhase ? 'BEST-PATH SOLVER' : reduction ? (nativeRcube ? 'RCUBE SOLVER' : 'REDUCTION SOLVER') : 'SOLVER RACE';
+      if (head) head.textContent = twoPhase ? 'BEST-PATH SOLVER' : reduction ? (nativeRcube ? (pick==='competition' ? 'SOLVER COMPETITION' : pick==='gullicube' ? 'GULLICUBE SOLVER' : 'RCUBE SOLVER') : 'REDUCTION SOLVER') : 'SOLVER RACE';
       if (sub) sub.textContent = twoPhase
         ? 'two-phase solver — near-optimal, never the scramble inverse'
         : reduction
@@ -1225,6 +1285,23 @@ WIRE = r'''
         cb.addEventListener('click', function(){ cancelSolve(self); });
         solveBtn.parentNode.insertBefore(cb, solveBtn.nextSibling);
       }
+      if (solveBtn && solveBtn.parentNode && !self.root.querySelector('[data-solver-select]')){
+        var wrap = document.createElement('label');
+        wrap.style.cssText = 'display:none;margin:0 0 12px;font-size:12px;color:#6B675E;';
+        wrap.appendChild(document.createTextNode('Solver '));
+        var sel = document.createElement('select'); sel.setAttribute('data-solver-select','');
+        sel.style.cssText = 'width:100%;height:38px;margin-top:6px;border-radius:12px;border:1px solid #E4E0D6;background:#fff;padding:0 10px;font-size:13px;';
+        [['rcube','RCube'],['gullicube','Gullicube'],['competition','Competition (both, shortest wins)']].forEach(function(o){
+          var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op);
+        });
+        wrap.appendChild(sel); sel._wrap = wrap;
+        sel.addEventListener('change', function(){ if (self.resetLanes && !self.busy && !self._solvePending) self.resetLanes(); applyEngineLabels(self); });
+        solveBtn.parentNode.insertBefore(wrap, solveBtn);
+        var tc = nativeCore();
+        if (tc && tc.invoke) tc.invoke('available_solvers').then(function(a){
+          if (a && !a.gullicube) Array.prototype.forEach.call(sel.options, function(op){ if (op.value !== 'rcube') { op.disabled = true; op.textContent += ' (not installed)'; } });
+        }).catch(function(){});
+      }
       var sd2 = self.root.querySelector('[data-scramble]');
       if (sd2) sd2.addEventListener('input', function(){ setTimeout(function(){ refreshSolvability(self); }, 0); });
       refreshSolvability(self);
@@ -1239,10 +1316,10 @@ WIRE = r'''
   }
 
   function markLive(){}
+
 '''
 
-BOOT = r'''
-  function bindAndMount(){
+BOOT = r'''  function bindAndMount(){
     const props = { autoSpin: true, accent: '#161514', palette: 'Classic' };
     const inst = new Component(props);
     const vals = inst.renderVals ? inst.renderVals() : {};
