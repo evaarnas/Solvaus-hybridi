@@ -44,7 +44,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "gullicube-bundle/": "gullicube/"
+      "gullicube-bundle/": "gullicube-runtime/"
     },
     "category": "Education",
     "shortDescription": "Replay-verified N×N cube solver studio",

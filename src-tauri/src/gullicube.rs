@@ -50,6 +50,7 @@ fn candidate_dirs() -> Vec<PathBuf> {
         for ancestor in start.ancestors().take(6) {
             dirs.push(ancestor.to_path_buf());
             dirs.push(ancestor.join("gullicube"));
+            dirs.push(ancestor.join("gullicube-runtime"));
         }
     }
     dirs
