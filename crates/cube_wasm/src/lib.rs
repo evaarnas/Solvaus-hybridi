@@ -52,7 +52,9 @@ fn with_kociemba<R>(f: impl FnOnce(&cube_solver::kociemba::search::Solver) -> R)
 }
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(inline_js = "export function post_solve_progress(percent) { if (typeof self !== 'undefined' && typeof self.postMessage === 'function') { self.postMessage({ type: 'progress', percent: percent }); } }")]
+#[wasm_bindgen(
+    inline_js = "export function post_solve_progress(percent) { if (typeof self !== 'undefined' && typeof self.postMessage === 'function') { self.postMessage({ type: 'progress', percent: percent }); } }"
+)]
 extern "C" {
     /// Streams the stage-based estimate to the main thread from inside the worker.
     fn post_solve_progress(percent: f64);

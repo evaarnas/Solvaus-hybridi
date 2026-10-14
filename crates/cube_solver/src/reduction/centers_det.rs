@@ -1275,7 +1275,8 @@ pub fn solve_centers(cube: &mut StickerCube) -> Vec<Move> {
             }
             let cc = correct_count(cube, &w_cells, want);
             super::report_progress(
-                8.0 + 42.0 * (fi as f64 + cc as f64 / w_cells.len().max(1) as f64) / order.len() as f64,
+                8.0 + 42.0 * (fi as f64 + cc as f64 / w_cells.len().max(1) as f64)
+                    / order.len() as f64,
             );
             if cc == w_cells.len() {
                 if dbg {

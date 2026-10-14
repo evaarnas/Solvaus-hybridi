@@ -313,7 +313,12 @@ fn encode_runs(n: usize, runs: Vec<EngineRun>) -> Result<Vec<u8>, String> {
     let Some(winner) = winner else {
         let errors: Vec<String> = runs
             .iter()
-            .filter_map(|run| run.moves.as_ref().err().map(|e| format!("{}: {e}", run.name)))
+            .filter_map(|run| {
+                run.moves
+                    .as_ref()
+                    .err()
+                    .map(|e| format!("{}: {e}", run.name))
+            })
             .collect();
         return Err(errors.join("; "));
     };
@@ -695,7 +700,10 @@ mod tests {
                 .iter()
                 .map(|lane| lane["moveCount"].as_u64().unwrap())
                 .collect();
-            assert_eq!(both["moveCount"].as_u64().unwrap(), *counts.iter().min().unwrap());
+            assert_eq!(
+                both["moveCount"].as_u64().unwrap(),
+                *counts.iter().min().unwrap()
+            );
         }
     }
 

@@ -171,7 +171,10 @@ fn tick_progress_band() {
 }
 
 /// Run `run` with a progress observer installed for the current thread.
-pub fn with_progress_observer<T>(observer: impl FnMut(f64) + 'static, run: impl FnOnce() -> T) -> T {
+pub fn with_progress_observer<T>(
+    observer: impl FnMut(f64) + 'static,
+    run: impl FnOnce() -> T,
+) -> T {
     PROGRESS.with(|slot| slot.replace(Some((Box::new(observer), -1.0))));
     BAND.with(|band| band.set(None));
     let result = run();

@@ -208,7 +208,9 @@ pub fn solve(
     };
 
     let _ = writer.join();
-    let moves = reader.join().map_err(|_| "Gullicube output reader failed")?;
+    let moves = reader
+        .join()
+        .map_err(|_| "Gullicube output reader failed")?;
     let stderr_text = error_reader.join().unwrap_or_default();
     if !status.success() {
         let detail = stderr_text.lines().next().unwrap_or("").trim();
@@ -221,5 +223,8 @@ pub fn solve(
     if let Some(report) = progress {
         report(100.0);
     }
-    Ok(moves.into_iter().filter(|movement| !movement.is_noop()).collect())
+    Ok(moves
+        .into_iter()
+        .filter(|movement| !movement.is_noop())
+        .collect())
 }

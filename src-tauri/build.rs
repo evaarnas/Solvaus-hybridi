@@ -124,7 +124,11 @@ fn build_gullicube() {
     let Some(profile_dir) = out_dir.ancestors().nth(3).map(Path::to_path_buf) else {
         return;
     };
-    let exe_name = if cfg!(windows) { "gullicube.exe" } else { "gullicube" };
+    let exe_name = if cfg!(windows) {
+        "gullicube.exe"
+    } else {
+        "gullicube"
+    };
     let exe = profile_dir.join(exe_name);
 
     println!("cargo:rerun-if-env-changed=GULLICUBE_CXX");
@@ -145,7 +149,8 @@ fn build_gullicube() {
             if cfg!(windows) {
                 for root in ["C:\\msys64", "C:\\mingw64", "C:\\msys2"] {
                     for sub in ["ucrt64", "mingw64", "clang64", ""] {
-                        candidates.push(format!("{root}\\{sub}\\bin\\g++.exe").replace("\\\\", "\\"));
+                        candidates
+                            .push(format!("{root}\\{sub}\\bin\\g++.exe").replace("\\\\", "\\"));
                     }
                 }
             }
@@ -160,9 +165,14 @@ fn build_gullicube() {
                 return;
             };
             let mut cmd = std::process::Command::new(&found);
-            if let Some(dir) = Path::new(&found).parent().filter(|d| !d.as_os_str().is_empty()) {
+            if let Some(dir) = Path::new(&found)
+                .parent()
+                .filter(|d| !d.as_os_str().is_empty())
+            {
                 let mut paths = vec![dir.to_path_buf()];
-                paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+                paths.extend(std::env::split_paths(
+                    &std::env::var_os("PATH").unwrap_or_default(),
+                ));
                 if let Ok(joined) = std::env::join_paths(paths) {
                     cmd.env("PATH", joined);
                 }
@@ -192,7 +202,11 @@ fn build_gullicube() {
         Ok(output) if output.status.success() => {}
         other => {
             let detail = match &other {
-                Ok(o) => String::from_utf8_lossy(&o.stderr).lines().take(6).collect::<Vec<_>>().join(" | "),
+                Ok(o) => String::from_utf8_lossy(&o.stderr)
+                    .lines()
+                    .take(6)
+                    .collect::<Vec<_>>()
+                    .join(" | "),
                 Err(e) => e.to_string(),
             };
             println!("cargo:warning=Gullicube failed to build ({detail}); the Gullicube solver is disabled in this build");
@@ -202,7 +216,10 @@ fn build_gullicube() {
 
     // A running app keeps the old executable locked; keep it rather than failing the build.
     if let Err(error) = std::fs::copy(&built, &exe) {
-        println!("cargo:warning=could not update {} ({error}); close the running app and rebuild", exe.display());
+        println!(
+            "cargo:warning=could not update {} ({error}); close the running app and rebuild",
+            exe.display()
+        );
     }
 
     copy_data(&root.join("data"), &profile_dir.join("data"));
@@ -242,7 +259,10 @@ fn main() {
     build_rcube();
     // The bundle resource directory must exist even when Gullicube cannot be built.
     let _ = std::fs::create_dir_all(BUNDLE_STAGE);
-    let _ = std::fs::write(Path::new(BUNDLE_STAGE).join("README.txt"), "Staged by build.rs\n");
+    let _ = std::fs::write(
+        Path::new(BUNDLE_STAGE).join("README.txt"),
+        "Staged by build.rs\n",
+    );
     build_gullicube();
     tauri_build::build()
 }

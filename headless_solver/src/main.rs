@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Instant;
 
-use cube_core::{Challenge, ChallengeSpec, CubeSnapshot, CubeSize, CubeState, StickerCube};
+use cube_core::{Challenge, ChallengeSpec, CubeSize, CubeSnapshot, CubeState, StickerCube};
 use cube_solver::kociemba::search::Solver;
 
 fn main() {
@@ -13,9 +13,7 @@ fn main() {
         Some("benchmark") => benchmark(),
         Some(size) => {
             let size: usize = size.parse().expect("size must be a number");
-            let input = args
-                .next()
-                .expect("usage: headless_solver <size> <state>");
+            let input = args.next().expect("usage: headless_solver <size> <state>");
 
             solve_state(size, &input);
         }
@@ -61,8 +59,7 @@ fn benchmark() {
 
         let mut cube = challenge.into_cube();
 
-        cube.validate()
-            .expect("generated cube is invalid");
+        cube.validate().expect("generated cube is invalid");
 
         let start = Instant::now();
 
@@ -81,15 +78,7 @@ fn benchmark() {
                 println!("Solved in {} moves.", moves.len());
                 println!("Solve time: {:.3} seconds.", seconds);
 
-                writeln!(
-                    csv,
-                    "{},{},{},{}",
-                    size.get(),
-                    seed,
-                    moves.len(),
-                    seconds
-                )
-                .unwrap();
+                writeln!(csv, "{},{},{},{}", size.get(), seed, moves.len(), seconds).unwrap();
 
                 csv.flush().unwrap();
             }
@@ -120,9 +109,9 @@ fn solve_state(size: usize, input: &str) {
     // psolver: U F R B L D
     // Cube-Solver: U D F B L R
     let faces = [
-        &input[0..stickers_per_face], // U
+        &input[0..stickers_per_face],                         // U
         &input[5 * stickers_per_face..6 * stickers_per_face], // D
-        &input[stickers_per_face..2 * stickers_per_face], // F
+        &input[stickers_per_face..2 * stickers_per_face],     // F
         &input[3 * stickers_per_face..4 * stickers_per_face], // B
         &input[4 * stickers_per_face..5 * stickers_per_face], // L
         &input[2 * stickers_per_face..3 * stickers_per_face], // R
@@ -158,13 +147,12 @@ fn solve_state(size: usize, input: &str) {
         }).collect::<Vec<_>>()
     });
 
-    let snapshot: CubeSnapshot = serde_json::from_value(json)
-        .expect("failed to construct CubeSnapshot");
+    let snapshot: CubeSnapshot =
+        serde_json::from_value(json).expect("failed to construct CubeSnapshot");
 
     let mut cube = StickerCube::from_snapshot(snapshot);
 
-    cube.validate()
-        .expect("invalid / impossible cube state");
+    cube.validate().expect("invalid / impossible cube state");
 
     println!("Building Kociemba tables...");
     let solver = Solver::new();
