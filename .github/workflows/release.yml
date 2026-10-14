@@ -216,6 +216,20 @@ jobs:
           --target ${{ matrix.target }}
           --bundles ${{ matrix.bundles }}
 
+      - name: Require bundled Gullicube
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=gullicube-bundle/gullicube
+          [[ "$RUNNER_OS" == Windows ]] && exe=gullicube-bundle/gullicube.exe
+          [[ -s "$exe" ]] || { echo "Gullicube was not built; no C++ compiler found" >&2; exit 1; }
+          [[ -n "$(ls gullicube-bundle/data)" ]] || { echo "Gullicube data missing" >&2; exit 1; }
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            lipo -archs "$exe" | tee /dev/stderr | grep -q arm64
+            lipo -archs "$exe" | grep -q x86_64
+          fi
+
       - name: Runtime-smoke the final generated WASM
         shell: bash
         run: node tools/wasm-runtime-smoke.mjs

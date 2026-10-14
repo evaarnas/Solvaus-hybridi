@@ -170,6 +170,10 @@ fn build_gullicube() {
             cmd
         }
     };
+    if cfg!(target_os = "macos") {
+        // Apple's clang emits one fat binary, so the universal app runs on both CPUs.
+        command.args(["-arch", "arm64", "-arch", "x86_64"]);
+    }
     command
         .args(["-O2", "-std=c++20", "-w", "-I"])
         .arg(root.join("src/brob"))

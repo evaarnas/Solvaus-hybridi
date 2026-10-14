@@ -35,6 +35,11 @@ fn candidate_dirs() -> Vec<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             starts.push(dir.to_path_buf());
+            // Tauri resource locations: macOS .app and Linux deb/Flatpak.
+            if let Some(parent) = dir.parent() {
+                starts.push(parent.join("Resources"));
+                starts.push(parent.join("lib").join("cube-solver"));
+            }
         }
     }
     if let Ok(cwd) = std::env::current_dir() {
