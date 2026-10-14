@@ -1,4 +1,8 @@
-# Gullicube lookup tables (*.cls) are binary-like data, not OpenEdge ABL source.
+# Gullicube lookup tables (*.cls) are data, not OpenEdge ABL source.
+# Linguist excludes vendored/generated paths from language stats.
+src-tauri/gullicube/data/** linguist-vendored
 src-tauri/gullicube/data/** linguist-generated
+src-tauri/gullicube/data/** linguist-detectable=false
 src-tauri/gullicube/data/** -diff
-*.cls linguist-language=Text
+*.cls linguist-vendored
+*.cls linguist-detectable=false
