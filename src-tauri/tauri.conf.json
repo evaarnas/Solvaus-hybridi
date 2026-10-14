@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Solvaus Hybrid",
+  "productName": "Solvaus-hybridi",
   "version": "0.1.0",
-  "identifier": "io.solvaus.hybrid",
+  "identifier": "io.solvaus.hybridi",
   "build": {
     "frontendDist": "../web",
     "beforeDevCommand": {
@@ -19,7 +19,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Solvaus Hybrid — N×N Solver Studio",
+        "title": "Solvaus-hybridi — N×N Solver Studio",
         "width": 1380,
         "height": 900,
         "minWidth": 920,

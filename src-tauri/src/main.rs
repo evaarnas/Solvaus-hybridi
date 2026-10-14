@@ -646,7 +646,7 @@ fn main() {
             cancel_solve
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Solvaus Hybrid");
+        .expect("error while running Solvaus-hybridi");
 }
 
 #[cfg(test)]

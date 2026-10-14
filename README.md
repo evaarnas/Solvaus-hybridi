@@ -1,18 +1,18 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128.png" width="96" alt="Solvaus Hybrid icon">
+  <img src="src-tauri/icons/128x128.png" width="96" alt="Solvaus-hybridi icon">
 
-# Solvaus Hybrid
+# Solvaus-hybridi
 
 **A local-first N×N cube solver combining RCube's large-cube engine with Cube-Solver's live Three.js animation.**
 
 Create a legal scramble, solve from the visible stickers alone, and watch the solution animate on the 3D cube.
 
-<img src="docs/images/studio-1001.png" width="760" alt="Solvaus Hybrid studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
+<img src="docs/images/studio-1001.png" width="760" alt="Solvaus-hybridi studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
 
-Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
+Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
 
 > [!NOTE]
-> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus Hybrid combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
+> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus-hybridi combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
 
 [![Rust](https://img.shields.io/badge/core-Rust-dea584.svg)](https://www.rust-lang.org/)
 [![RCube](https://img.shields.io/badge/large--cube-engine-C%2B%2B-blue.svg)](src-tauri/rcube)
@@ -20,7 +20,7 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 </div>
 
 > [!IMPORTANT]
-> **Solvaus Hybrid offers sizes supported by its solver and renderer.**
+> **Solvaus-hybridi offers sizes supported by its solver and renderer.**
 > The native desktop app supports **2×2–1001×1001**; the standalone browser supports **2×2–21×21**. Browser solves from 9×9 to 21×21 may take up to 10 minutes; desktop solves remain bounded by a five-minute deadline. Both can be cancelled.
 
 ## What you can do
@@ -105,7 +105,7 @@ Each press applies a real legal move to both the rendered cube and the Rust cube
 
 ## Solver inputs and privacy
 
-Solvaus Hybrid is local-first:
+Solvaus-hybridi is local-first:
 
 - no cloud solver,
 - no analytics runtime,

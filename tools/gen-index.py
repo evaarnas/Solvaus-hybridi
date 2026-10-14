@@ -1335,7 +1335,7 @@ BOOT = r'''
 
 html = ('<!DOCTYPE html>\n<html lang="en">\n<head>\n'
         '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        '<title>Solvaus Hybrid — N×N Solver Studio</title>\n'
+        '<title>Solvaus-hybridi — N×N Solver Studio</title>\n'
         + helmet + '\n</head>\n<body>\n' + body + '\n'
         '<script type="module">\n'
         "import init, { CubeLab } from './pkg/cube_wasm.js';\n"
