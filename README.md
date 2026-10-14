@@ -53,6 +53,10 @@ Solvaus Hybrid is distributed under **GPL-3.0** because it integrates RCube; see
 
 The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N. For native cubes above 21×21, the UI uses RCube's solved-state result directly. Browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out.
 
+### Choosing a solver (desktop, 4×4 and larger)
+
+A **Solver** dropdown above the Solve button picks the engine: **RCube**, **Gullicube**, or **Competition**, which runs both in parallel and plays back the shorter solution (the lanes show each engine's move count and time). [Gullicube](src-tauri/gullicube) is vendored C++ (GPL-3.0 / MPL-2.0, see its license files) that runs as a child process; it can use roughly 3 GB of memory and loads about 30 MB of data files. `src-tauri/build.rs` compiles it to `gullicube[.exe]` plus a `data/` folder beside the app binary. It needs `g++` or `clang++` on `PATH` (or `GULLICUBE_CXX`); the MSVC toolchain cannot build it. Without one, the build still succeeds and the Gullicube options show as "not installed". `SOLVAUS_GULLICUBE` can point at a prebuilt executable. Packaged installers do not bundle Gullicube yet.
+
 ### Large-cube limits
 
 The native desktop maximum is 1001×1001. Large cubes use the existing texture-based renderer above 21×21 rather than creating an individual 3D object for every cubie. Release-mode integration tests solve and independently replay representative odd and even states through 101×101; the 1001×1001 cap is currently covered by scramble-legality checks only, so very large solves are bounded by the five-minute deadline and may time out depending on the device. RCube's storage uses the next power-of-two face stride; larger cubes remain capped until runtime, memory use, UI responsiveness, and replay are tested across supported platforms.

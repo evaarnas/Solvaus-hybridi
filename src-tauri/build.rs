@@ -97,9 +97,132 @@ fn build_rcube() {
     }
 }
 
+/// Gullicube runs as a child process (it is a self-contained program with its own
+/// `main`, ~GBs of working memory and a data directory), so it is compiled to an
+/// executable and placed beside the app binary together with its `data/` files.
+/// A missing/unsupported C++ toolchain only disables that solver; it never fails
+/// the app build.
+fn build_gullicube() {
+    use std::path::PathBuf;
+
+    let root = Path::new("gullicube");
+    let sources = [
+        "src/full/gullicube.cpp",
+        "src/full/brobglue.cpp",
+        "src/brob/xcube.cpp",
+        "src/brob/cornersolver.cpp",
+        "src/brob/wingsolver.cpp",
+        "src/brob/util.cpp",
+        "src/brob/facelets.cpp",
+    ];
+    for dir in ["src", "data"] {
+        println!("cargo:rerun-if-changed=gullicube/{dir}");
+    }
+
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR"));
+    // OUT_DIR is target/<profile>/build/<pkg>-<hash>/out; the app binary is three levels up.
+    let Some(profile_dir) = out_dir.ancestors().nth(3).map(Path::to_path_buf) else {
+        return;
+    };
+    let exe_name = if cfg!(windows) { "gullicube.exe" } else { "gullicube" };
+    let exe = profile_dir.join(exe_name);
+
+    println!("cargo:rerun-if-env-changed=GULLICUBE_CXX");
+    // The Rust toolchain may be MSVC, which cannot build gullicube: fall back to a
+    // GCC/Clang on PATH (or GULLICUBE_CXX).
+    let gnu_like = cc::Build::new()
+        .cpp(true)
+        .try_get_compiler()
+        .ok()
+        .filter(|c| c.is_like_gnu() || c.is_like_clang());
+    let mut command = match gnu_like {
+        Some(compiler) => compiler.to_command(),
+        None => {
+            let mut candidates: Vec<String> = match std::env::var("GULLICUBE_CXX") {
+                Ok(c) => vec![c],
+                Err(_) => vec!["g++".to_string(), "clang++".to_string()],
+            };
+            if cfg!(windows) {
+                for root in ["C:\\msys64", "C:\\mingw64", "C:\\msys2"] {
+                    for sub in ["ucrt64", "mingw64", "clang64", ""] {
+                        candidates.push(format!("{root}\\{sub}\\bin\\g++.exe").replace("\\\\", "\\"));
+                    }
+                }
+            }
+            let found = candidates.into_iter().find(|c| {
+                std::process::Command::new(c)
+                    .arg("--version")
+                    .output()
+                    .is_ok_and(|o| o.status.success())
+            });
+            let Some(found) = found else {
+                println!("cargo:warning=Gullicube needs g++/clang++ (set GULLICUBE_CXX); the Gullicube solver is disabled in this build");
+                return;
+            };
+            let mut cmd = std::process::Command::new(&found);
+            if let Some(dir) = Path::new(&found).parent().filter(|d| !d.as_os_str().is_empty()) {
+                let mut paths = vec![dir.to_path_buf()];
+                paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+                if let Ok(joined) = std::env::join_paths(paths) {
+                    cmd.env("PATH", joined);
+                }
+            }
+            cmd
+        }
+    };
+    command
+        .args(["-O2", "-std=c++20", "-w", "-I"])
+        .arg(root.join("src/brob"))
+        .arg("-I")
+        .arg(root.join("src/full"));
+    for source in sources {
+        command.arg(root.join(source));
+    }
+    let built = out_dir.join(exe_name);
+    command.arg("-o").arg(&built);
+    if cfg!(windows) {
+        command.arg("-static");
+    }
+    command.arg("-lpthread");
+    match command.output() {
+        Ok(output) if output.status.success() => {}
+        other => {
+            let detail = match &other {
+                Ok(o) => String::from_utf8_lossy(&o.stderr).lines().take(6).collect::<Vec<_>>().join(" | "),
+                Err(e) => e.to_string(),
+            };
+            println!("cargo:warning=Gullicube failed to build ({detail}); the Gullicube solver is disabled in this build");
+            return;
+        }
+    }
+
+    // A running app keeps the old executable locked; keep it rather than failing the build.
+    if let Err(error) = std::fs::copy(&built, &exe) {
+        println!("cargo:warning=could not update {} ({error}); close the running app and rebuild", exe.display());
+    }
+
+    let data_out = profile_dir.join("data");
+    if std::fs::create_dir_all(&data_out).is_ok() {
+        if let Ok(entries) = std::fs::read_dir(root.join("data")) {
+            for entry in entries.flatten() {
+                let target = data_out.join(entry.file_name());
+                let up_to_date = target
+                    .metadata()
+                    .ok()
+                    .zip(entry.metadata().ok())
+                    .is_some_and(|(a, b)| a.len() == b.len());
+                if !up_to_date {
+                    let _ = std::fs::copy(entry.path(), target);
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     assert_frontend_is_fresh();
     assert_packaged_style_policy();
     build_rcube();
+    build_gullicube();
     tauri_build::build()
 }

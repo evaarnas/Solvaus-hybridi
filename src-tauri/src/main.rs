@@ -1,6 +1,8 @@
 // Hide the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod gullicube;
+
 use cube_core::{Axis, CubeSize, Move};
 use cube_wasm::NativeReductionControl;
 use std::ffi::{c_char, c_void, CStr};
@@ -22,12 +24,12 @@ struct RcubeMove {
 type CancellationCheck = unsafe extern "C" fn(*mut c_void) -> bool;
 type ProgressObserver = unsafe extern "C" fn(*mut c_void, f64);
 
-struct SolveProgressContext {
-    report: Box<dyn Fn(f64) + Send + Sync>,
+struct SolveProgressContext<'a> {
+    report: &'a (dyn Fn(f64) + Send + Sync),
 }
 
 unsafe extern "C" fn rcube_report_progress(context: *mut c_void, percent: f64) {
-    let Some(context) = (unsafe { context.cast::<SolveProgressContext>().as_ref() }) else {
+    let Some(context) = (unsafe { context.cast::<SolveProgressContext<'_>>().as_ref() }) else {
         return;
     };
     (context.report)(percent.clamp(0.0, 100.0));
@@ -91,17 +93,152 @@ fn rcube_move_to_core(movement: RcubeMove, n: usize) -> Result<Move, String> {
     Ok(Move::new(axis, layer, layer, turns))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Solver {
+    Rcube,
+    Gullicube,
+    Competition,
+}
+
+impl Solver {
+    fn parse(name: &str) -> Result<Self, String> {
+        match name {
+            "rcube" => Ok(Self::Rcube),
+            "gullicube" => Ok(Self::Gullicube),
+            "competition" => Ok(Self::Competition),
+            _ => Err(format!("unknown solver `{name}`")),
+        }
+    }
+}
+
+type ProgressFn = dyn Fn(f64) + Send + Sync;
+
+/// One engine's outcome in a (possibly multi-engine) solve.
+struct EngineRun {
+    id: &'static str,
+    name: &'static str,
+    label: &'static str,
+    moves: Result<Vec<Move>, String>,
+    elapsed_ms: u128,
+}
+
+fn run_rcube(
+    n: usize,
+    colors: &[u8],
+    control: &NativeReductionControl,
+    progress: Option<&ProgressFn>,
+) -> EngineRun {
+    let started = Instant::now();
+    let moves = rcube_moves(n, colors, control, progress);
+    EngineRun {
+        id: "rcube",
+        name: "RCube",
+        label: "RCube center and edge reduction",
+        moves,
+        elapsed_ms: started.elapsed().as_millis(),
+    }
+}
+
+fn run_gullicube(
+    n: usize,
+    colors: &[u8],
+    control: &NativeReductionControl,
+    progress: Option<&ProgressFn>,
+) -> EngineRun {
+    let started = Instant::now();
+    let moves = gullicube::solve(n, colors, control, progress);
+    EngineRun {
+        id: "gullicube",
+        name: "Gullicube",
+        label: "Gullicube beam-search reduction",
+        moves,
+        elapsed_ms: started.elapsed().as_millis(),
+    }
+}
+
+/// Run the selected engine, or both at once and keep the shorter solution.
+fn solve_native(
+    n: usize,
+    colors: &[u8],
+    control: &NativeReductionControl,
+    solver: Solver,
+    progress: Option<std::sync::Arc<ProgressFn>>,
+) -> Result<Vec<u8>, String> {
+    let max_n = if solver == Solver::Rcube {
+        MAX_NATIVE_CUBE_SIZE
+    } else {
+        MAX_NATIVE_CUBE_SIZE.min(gullicube::MAX_SIZE)
+    };
+    if !(4..=max_n).contains(&n) || colors.len() != 6 * n * n {
+        return Err("invalid cube size or sticker buffer".to_string());
+    }
+
+    let runs = match solver {
+        Solver::Rcube => vec![run_rcube(n, colors, control, progress.as_deref())],
+        Solver::Gullicube => vec![run_gullicube(n, colors, control, progress.as_deref())],
+        Solver::Competition => {
+            // Overall progress is the mean of both engines' progress.
+            let lanes = std::sync::Arc::new(Mutex::new([0.0f64; 2]));
+            let lane_progress = |lane: usize| {
+                let progress = progress.clone();
+                let lanes = lanes.clone();
+                move |percent: f64| {
+                    let mut lanes = lanes.lock().unwrap_or_else(|e| e.into_inner());
+                    lanes[lane] = percent;
+                    if let Some(progress) = &progress {
+                        progress((lanes[0] + lanes[1]) / 2.0);
+                    }
+                }
+            };
+            let (rcube_progress, gullicube_progress) = (lane_progress(0), lane_progress(1));
+            std::thread::scope(|scope| {
+                let gullicube = scope.spawn(|| {
+                    let run = run_gullicube(n, colors, control, Some(&gullicube_progress));
+                    gullicube_progress(100.0);
+                    run
+                });
+                let rcube = run_rcube(n, colors, control, Some(&rcube_progress));
+                rcube_progress(100.0);
+                let gullicube = gullicube.join().unwrap_or_else(|_| EngineRun {
+                    id: "gullicube",
+                    name: "Gullicube",
+                    label: "Gullicube beam-search reduction",
+                    moves: Err("Gullicube thread panicked".to_string()),
+                    elapsed_ms: 0,
+                });
+                vec![rcube, gullicube]
+            })
+        }
+    };
+    encode_runs(n, runs)
+}
+
+#[cfg(test)]
 fn solve_with_rcube(
     n: usize,
     colors: &[u8],
     control: &NativeReductionControl,
-    progress: Option<Box<dyn Fn(f64) + Send + Sync>>,
+    progress: Option<Box<ProgressFn>>,
 ) -> Result<Vec<u8>, String> {
+    solve_native(
+        n,
+        colors,
+        control,
+        Solver::Rcube,
+        progress.map(std::sync::Arc::from),
+    )
+}
+
+fn rcube_moves(
+    n: usize,
+    colors: &[u8],
+    control: &NativeReductionControl,
+    progress: Option<&ProgressFn>,
+) -> Result<Vec<Move>, String> {
     if !(4..=MAX_NATIVE_CUBE_SIZE).contains(&n) || colors.len() != 6 * n * n {
         return Err("invalid cube size or sticker buffer".to_string());
     }
 
-    let started = Instant::now();
     let mut raw_moves = std::ptr::null_mut();
     let mut raw_move_count = 0usize;
     let mut error = [0 as c_char; 512];
@@ -115,7 +252,7 @@ fn solve_with_rcube(
     let progress_context_ptr = progress_context
         .as_mut()
         .map_or(std::ptr::null_mut(), |context| {
-            (context as *mut SolveProgressContext).cast::<c_void>()
+            (context as *mut SolveProgressContext<'_>).cast::<c_void>()
         });
     let status = unsafe {
         rcube_solve(
@@ -153,19 +290,75 @@ fn solve_with_rcube(
     };
     unsafe { rcube_free_moves(raw_moves) };
 
-    let size = CubeSize::new(n).map_err(|error| error.to_string())?;
-    let mut moves = Vec::new();
-    // Packed as layer | axis << 16 | (turns + 2) << 18.
-    let mut packed_moves: Vec<u32> = Vec::new();
-    let mut notation = Vec::with_capacity(engine_moves.len());
-    let mut move_count = 0usize;
+    let mut moves = Vec::with_capacity(engine_moves.len());
     for engine_move in engine_moves {
         let movement = rcube_move_to_core(engine_move, n)?;
-        if movement.is_noop() {
-            continue;
+        if !movement.is_noop() {
+            moves.push(movement);
         }
+    }
+    Ok(moves)
+}
 
-        move_count += 1;
+/// Pick the shortest successful run and encode it for the frontend. Single-engine
+/// results keep the original wire format; multi-engine and Gullicube results add
+/// per-engine lane details.
+fn encode_runs(n: usize, runs: Vec<EngineRun>) -> Result<Vec<u8>, String> {
+    let winner = runs
+        .iter()
+        .enumerate()
+        .filter_map(|(index, run)| run.moves.as_ref().ok().map(|moves| (index, moves.len())))
+        .min_by_key(|&(_, len)| len)
+        .map(|(index, _)| index);
+    let Some(winner) = winner else {
+        let errors: Vec<String> = runs
+            .iter()
+            .filter_map(|run| run.moves.as_ref().err().map(|e| format!("{}: {e}", run.name)))
+            .collect();
+        return Err(errors.join("; "));
+    };
+
+    let size = CubeSize::new(n).map_err(|error| error.to_string())?;
+    let lanes: Vec<serde_json::Value> = runs
+        .iter()
+        .enumerate()
+        .map(|(index, run)| match &run.moves {
+            Ok(moves) if runs.len() > 1 => serde_json::json!({
+                "id": run.id,
+                "pct": 100,
+                "moveCount": moves.len(),
+                "label": format!(
+                    "{}: {} moves in {:.1}s{}",
+                    run.name,
+                    moves.len(),
+                    run.elapsed_ms as f64 / 1000.0,
+                    if index == winner { "" } else { " — lost" }
+                ),
+                "solved": true
+            }),
+            Ok(moves) => serde_json::json!({
+                "id": run.id, "pct": 100, "moveCount": moves.len(),
+                "label": run.label, "solved": true
+            }),
+            Err(error) => serde_json::json!({
+                "id": run.id, "pct": 0, "moveCount": 0,
+                "label": format!("{}: {error}", run.name), "solved": false
+            }),
+        })
+        .collect();
+    let run = &runs[winner];
+    let moves = run.moves.as_ref().map_err(|e| e.clone())?;
+    let elapsed_ms = if runs.len() > 1 {
+        runs.iter().map(|r| r.elapsed_ms).max().unwrap_or(0)
+    } else {
+        run.elapsed_ms
+    };
+    let mut json_moves = Vec::new();
+    // Packed as layer | axis << 16 | (turns + 2) << 18.
+    let mut packed_moves: Vec<u32> = Vec::new();
+    let mut notation = Vec::with_capacity(moves.len());
+    let move_count = moves.len();
+    for &movement in moves {
         if n <= TEXTURE_RENDER_THRESHOLD {
             notation.push(movement.notation(size));
         }
@@ -182,7 +375,7 @@ fn solve_with_rcube(
         };
         for _ in 0..quarter_turns {
             if n <= TEXTURE_RENDER_THRESHOLD {
-                moves.push(serde_json::json!({
+                json_moves.push(serde_json::json!({
                     "axis": axis,
                     "layer": movement.layer_start,
                     "dir": direction
@@ -199,27 +392,44 @@ fn solve_with_rcube(
         }
     }
 
+    let winner_name = run.id;
+    let lanes_json = serde_json::Value::Array(lanes);
     // Large solves ship as raw bytes: serializing millions of moves as JSON and
     // parsing them again in the webview dominated the wait after the solve.
+    // Multi-lane details trail the packed moves as a UTF-8 JSON object.
     if n > TEXTURE_RENDER_THRESHOLD {
-        let mut bytes = Vec::with_capacity(9 + packed_moves.len() * 4);
+        let meta = if winner_name == "rcube" && runs.len() == 1 {
+            String::new()
+        } else {
+            serde_json::json!({
+                "winner": winner_name,
+                "elapsedMs": elapsed_ms,
+                "lanes": lanes_json
+            })
+            .to_string()
+        };
+        let mut bytes = Vec::with_capacity(9 + packed_moves.len() * 4 + meta.len());
         bytes.push(1u8);
         bytes.extend_from_slice(&(move_count as u32).to_le_bytes());
         bytes.extend_from_slice(&(packed_moves.len() as u32).to_le_bytes());
         for packed in &packed_moves {
             bytes.extend_from_slice(&packed.to_le_bytes());
         }
+        bytes.extend_from_slice(meta.as_bytes());
         return Ok(bytes);
     }
-    let notation_json = serde_json::to_string(&notation).map_err(|error| error.to_string())?;
-    let json = format!(
-        "{{\"found\":true,\"solvedByRcube\":true,\"compactMoves\":false,\"winner\":\"rcube\",\"moveCount\":{},\"elapsedMs\":{},\"moves\":{},\"notation\":{},\"lanes\":[{{\"id\":\"rcube\",\"pct\":100,\"moveCount\":{},\"label\":\"RCube center and edge reduction\",\"solved\":true}}]}}",
-        move_count,
-        started.elapsed().as_millis(),
-        serde_json::Value::Array(moves),
-        notation_json,
-        move_count
-    );
+    let json = serde_json::json!({
+        "found": true,
+        "solvedByRcube": true,
+        "compactMoves": false,
+        "winner": winner_name,
+        "moveCount": move_count,
+        "elapsedMs": elapsed_ms,
+        "moves": json_moves,
+        "notation": notation,
+        "lanes": lanes_json
+    })
+    .to_string();
     let mut bytes = Vec::with_capacity(json.len() + 1);
     bytes.push(0u8);
     bytes.extend_from_slice(json.as_bytes());
@@ -366,7 +576,12 @@ async fn solve_stickers(
     request_token: String,
     n: usize,
     colors: Vec<u8>,
+    solver: Option<String>,
 ) -> Result<tauri::ipc::Response, String> {
+    let solver = Solver::parse(solver.as_deref().unwrap_or("rcube"))?;
+    if solver != Solver::Rcube && !gullicube::is_available() {
+        return Err(gullicube::MISSING_MESSAGE.to_string());
+    }
     if request_token.len() < 16 || request_token.len() > 128 {
         return Err("invalid solve request token".to_string());
     }
@@ -379,13 +594,14 @@ async fn solve_stickers(
 
     let worker_control = control.clone();
     let join_result = tauri::async_runtime::spawn_blocking(move || {
-        solve_with_rcube(
+        solve_native(
             n,
             &colors,
             &worker_control,
-            Some(Box::new(move |percent| {
+            solver,
+            Some(std::sync::Arc::new(move |percent| {
                 if let Err(error) = on_progress.send(serde_json::json!({ "percent": percent })) {
-                    eprintln!("failed to send RCube solve progress: {error}");
+                    eprintln!("failed to send solve progress: {error}");
                 }
             })),
         )
@@ -409,6 +625,12 @@ async fn scramble_rcube(n: usize, seed: i32) -> Result<String, String> {
         .map_err(|error| format!("native scramble task failed: {error}"))?
 }
 
+/// Which optional engines are installed, so the UI only offers working choices.
+#[tauri::command]
+fn available_solvers() -> serde_json::Value {
+    serde_json::json!({ "rcube": true, "gullicube": gullicube::is_available() })
+}
+
 #[tauri::command(rename_all = "camelCase")]
 fn cancel_solve(state: State<'_, SolveState>, request_token: String) -> Result<bool, String> {
     state.cancel(&request_token)
@@ -420,6 +642,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             solve_stickers,
             scramble_rcube,
+            available_solvers,
             cancel_solve
         ])
         .run(tauri::generate_context!())
@@ -429,6 +652,69 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn replay_json_solution(n: usize, colors: &[u8], result: &[u8]) -> serde_json::Value {
+        assert_eq!(result[0], 0);
+        let result: serde_json::Value = serde_json::from_slice(&result[1..]).unwrap();
+        let mut lab = cube_wasm::CubeLab::new(n);
+        assert!(lab.load_face_colors(colors));
+        for movement in result["moves"].as_array().unwrap() {
+            lab.apply_design_move(
+                movement["axis"].as_u64().unwrap() as u8,
+                movement["layer"].as_u64().unwrap() as usize,
+                movement["dir"].as_i64().unwrap() as i32,
+            );
+        }
+        assert!(lab.is_solved(), "returned solution did not solve n={n}");
+        result
+    }
+
+    #[test]
+    fn gullicube_solutions_replay_and_competition_picks_shorter() {
+        if !gullicube::is_available() {
+            eprintln!("skipping: gullicube executable not found");
+            return;
+        }
+        for n in [4, 5, 6] {
+            let mut lab = cube_wasm::CubeLab::new(n);
+            assert!(lab.scramble(40, 0x5eed + n as u64) > 0);
+            let colors = lab.face_colors(n);
+
+            let control = cube_wasm::native_reduction_control(n);
+            let result = solve_native(n, &colors, &control, Solver::Gullicube, None).unwrap();
+            let result = replay_json_solution(n, &colors, &result);
+            assert_eq!(result["winner"], "gullicube");
+
+            let control = cube_wasm::native_reduction_control(n);
+            let both = solve_native(n, &colors, &control, Solver::Competition, None).unwrap();
+            let both = replay_json_solution(n, &colors, &both);
+            assert_eq!(both["lanes"].as_array().unwrap().len(), 2);
+            let counts: Vec<u64> = both["lanes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|lane| lane["moveCount"].as_u64().unwrap())
+                .collect();
+            assert_eq!(both["moveCount"].as_u64().unwrap(), *counts.iter().min().unwrap());
+        }
+    }
+
+    #[test]
+    fn gullicube_move_parsing_matches_core_notation() {
+        let size = CubeSize::new(5).unwrap();
+        for (token, expected) in [
+            ("U", Move::face(cube_core::Face::Up, size, -1)),
+            ("R2", Move::face(cube_core::Face::Right, size, 2)),
+            ("D'", Move::face(cube_core::Face::Down, size, 1)),
+            ("L", Move::face(cube_core::Face::Left, size, -1)),
+            ("2F'", Move::new(Axis::Z, 3, 3, 1)),
+            ("3B", Move::new(Axis::Z, 2, 2, 1)),
+        ] {
+            assert_eq!(gullicube::parse_move(token, 5), Some(expected), "{token}");
+        }
+        assert_eq!(gullicube::parse_move("6U", 5), None);
+        assert_eq!(gullicube::parse_move("U3", 5), None);
+    }
 
     #[test]
     fn rcube_solution_returns_path_and_monotonic_progress() {
