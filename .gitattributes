@@ -1,0 +1,4 @@
+# Gullicube lookup tables (*.cls) are binary-like data, not OpenEdge ABL source.
+src-tauri/gullicube/data/** linguist-generated
+src-tauri/gullicube/data/** -diff
+*.cls linguist-language=Text
