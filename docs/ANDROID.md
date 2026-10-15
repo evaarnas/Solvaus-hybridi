@@ -6,9 +6,11 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 - **Solvers:** RCube is compiled by the NDK and works natively. Gullicube is compiled by `build.rs`
   into `libgullicube.so` (an executable placed in `gen/android/app/src/main/jniLibs/<abi>/`, the only
   location Android lets apps run files from); its data tables are embedded in the app and unpacked to
-  private storage on first use. The CI workflow sets `android:extractNativeLibs="true"` in the manifest
-  so the executable is extracted. Gullicube can need about 3 GB of RAM, so on phones only small and
-  medium cubes are likely to finish; Android may stop the process on larger ones.
+  private storage on first use. The CI workflow enables `useLegacyPackaging` for native libraries so
+  the executable is extracted to disk. Gullicube needs a 64-bit target (`__int128`), so it is
+  available on arm64 phones but shows as "not installed" in the 32-bit armv7 build. It can need about
+  3 GB of RAM, so on phones only small and medium cubes are likely to finish; Android may stop the
+  process on larger ones.
 - **Build in CI:** the `Android app` workflow produces a debug-signed APK (arm64 + armv7) that can be
   sideloaded (`adb install` or opening the file on the phone).
 - **Build locally:** install JDK 17, the Android SDK and NDK (set `ANDROID_HOME` and `NDK_HOME`), add
