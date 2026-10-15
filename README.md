@@ -3,13 +3,13 @@
 
 # Solvaus-hybridi
 
-**A local-first N×N cube solver combining RCube's large-cube engine with Cube-Solver's live Three.js animation.**
+**A local-first N×N cube solver combining the RCube and Gullicube large-cube engines with Cube-Solver's live Three.js animation.**
 
 Create a legal scramble, solve from the visible stickers alone, and watch the solution animate on the 3D cube.
 
 <img src="docs/images/studio-1001.png" width="760" alt="Solvaus-hybridi studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
 
-Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)). The vendored [Gullicube](src-tauri/gullicube) solver is licensed GPL-3.0 / MPL-2.0 (see [`LICENSE-GPL.md`](src-tauri/gullicube/LICENSE-GPL.md) and [`LICENSE-MPL.md`](src-tauri/gullicube/LICENSE-MPL.md)).
+Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube and Gullicube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)). The vendored [Gullicube](src-tauri/gullicube) solver is licensed GPL-3.0 / MPL-2.0 (see [`LICENSE-GPL.md`](src-tauri/gullicube/LICENSE-GPL.md) and [`LICENSE-MPL.md`](src-tauri/gullicube/LICENSE-MPL.md)).
 
 > [!NOTE]
 > **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. **Gullicube** (vendored in [`src-tauri/gullicube`](src-tauri/gullicube), GPL-3.0 / MPL-2.0) is an optional second native solver aimed at shorter solutions. Solvaus-hybridi combines these, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
@@ -38,7 +38,7 @@ Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; se
 1. **Choose a supported size.** Desktop offers 2×2 through 1001×1001; browser offers 2×2 through 21×21.
 2. **Create the state.** Press **Scramble**, enter an algorithm, or turn faces manually.
 3. **Press Solve.** The solver receives the complete sticker-color state—not the scramble sequence.
-4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–21×21 solves use bounded WASM reduction, while desktop uses the cancellable native RCube engine.
+4. **Wait or cancel.** Small cubes run in a Web Worker; browser 4×4–21×21 solves use bounded WASM reduction, while desktop uses the cancellable native RCube and Gullicube engines.
 5. **Replay the solution.** Smaller cubes replay solver moves through the cube model; native cubes above 21×21 use RCube's solved-state result.
 6. **Watch the 3D animation.** The existing Cube-Solver renderer animates the returned move sequence in real time.
 

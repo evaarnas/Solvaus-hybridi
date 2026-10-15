@@ -48,6 +48,6 @@
     },
     "category": "Education",
     "shortDescription": "N×N cube solver studio",
-        "longDescription": "Build random or custom scrambles, solve with RCube on desktop or Rust/WASM in the browser, replay the solution (independently checked up to 21×21), and watch the moves animate in 3D."
+        "longDescription": "Build random or custom scrambles, solve with RCube or Gullicube on desktop or Rust/WASM in the browser, replay the solution (independently checked up to 21×21), and watch the moves animate in 3D."
   }
 }
