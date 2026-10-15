@@ -313,14 +313,20 @@ import init, { CubeLab } from './pkg/cube_wasm.js';
 class Component extends DCLogic {
   state = {};
 
+  scrollToTopOnAndroid() {
+    if (!document.documentElement.classList.contains('android')) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (this.root) this.root.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   renderVals() {
     return {
       rootRef: (el) => { if (el) this.root = el; },
       onIncN: () => this.setN(this.n + 1),
       onDecN: () => this.setN(this.n - 1),
       onScramble: () => this.scramble(),
-      onSolve: () => this.solve(),
-      onReplay: () => this.replay(),
+      onSolve: () => { this.scrollToTopOnAndroid(); this.solve(); },
+      onReplay: () => { this.scrollToTopOnAndroid(); this.replay(); },
       onReset: () => this.resetSolved(),
       onScrambleInput: (e) => { this.scrambleDepth = parseInt(e.target.value, 10); this.q('[data-scramble-val]').textContent = this.scrambleDepth; },
       onNSlider: (e) => this.setN(this.sliderToN(parseInt(e.target.value, 10))),
