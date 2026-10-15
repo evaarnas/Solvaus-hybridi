@@ -51,6 +51,23 @@ jobs:
       - name: Verify generated frontend
         run: python tools/gen-index.py --check
 
+      # Android refuses to update an app signed with a different key. Debug builds
+      # otherwise get a fresh key on every runner, so keep one stable key in the cache.
+      - name: Restore stable debug signing key
+        id: debugkey
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: Create debug signing key
+        if: steps.debugkey.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android \
+            -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 36500 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Generate the Android project
         working-directory: src-tauri
         run: cargo tauri android init --ci

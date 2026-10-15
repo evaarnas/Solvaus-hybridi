@@ -19,3 +19,7 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
   <https://v2.tauri.app/distribute/sign/android/>.
 
 Very large cubes (hundreds of layers) can exceed a phone's memory; prefer sizes up to about 100.
+
+## Reinstall / update fails
+
+Android only updates an app if it is signed with the same key. APKs from CI runs before the stable debug key was added (and any build made on another machine) use a different key, so uninstall the old app once, then install the new APK. Later CI builds reuse one cached key and update in place. If the cache is evicted (unused for 7 days), uninstall once more.
