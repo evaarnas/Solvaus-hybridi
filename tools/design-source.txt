@@ -37,10 +37,10 @@ html.android .topbar span[style*="10.5px"],html.android .topbar > div:last-child
 html.android .topbar [data-spin]{padding:10px!important}
 html.android .studio-layout{padding:8px!important;gap:10px!important;min-height:0!important}
 html.android .cube-viewport{min-height:0!important;height:min(58vw + 90px,52vh);border-radius:16px!important;position:sticky!important;top:0;z-index:5;flex:none!important}
-html.android .cube-viewport [data-stage]{touch-action:none}
+html.android .cube-viewport [data-stage]{touch-action:none;bottom:48px!important}
 html.android .cube-viewport > div[style*="bottom:16px"]{display:none!important}
 html.android .cube-viewport > div[style*="top:14px"]{transform:scale(.62);transform-origin:top right}
-html.android .cube-viewport > div[style*="bottom:26px"]{bottom:12px!important;max-width:calc(100% - 20px)}
+html.android .cube-viewport > div[style*="bottom:26px"]{bottom:8px!important;max-width:calc(100% - 20px)}
 html.android .control-rail{gap:10px!important;padding-right:0!important}
 html.android .control-rail > div{padding:14px!important}
 html.android .control-rail button{min-height:44px}
