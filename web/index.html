@@ -167,49 +167,6 @@ html.android [data-size-note]{font-size:12px!important}
           </div>
         </div>
 
-        <!-- custom scramble builder -->
-        <div data-custom-scramble style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px;">
-            <div>
-              <div style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#66635C;">BUILD YOUR SCRAMBLE</div>
-              <div style="font-size:11px;color:#66635C;margin-top:4px;line-height:1.4;">Type an algorithm or turn faces yourself.</div>
-            </div>
-            <span data-custom-count style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#1573E6;white-space:nowrap;">0 moves</span>
-          </div>
-          <label for="custom-algorithm" style="display:block;font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">MOVE NOTATION</label>
-          <textarea id="custom-algorithm" data-alg-input rows="2" spellcheck="false" aria-describedby="custom-algorithm-help custom-algorithm-error" placeholder="R U R' U'  ·  3Rw2 F2" style="width:100%;resize:vertical;min-height:58px;border:1px solid #DEDAD2;border-radius:11px;padding:10px 11px;background:#FBFBF9;color:#1A1A18;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
-          <div id="custom-algorithm-error" data-alg-error role="alert" style="display:none;margin-top:7px;color:#A23B3B;font-size:11px;line-height:1.4;"></div>
-          <div style="display:flex;gap:8px;margin-top:9px;">
-            <button type="button" data-alg-apply style="flex:1;height:36px;border-radius:10px;background:#161514;color:#fff;font-size:12px;font-weight:600;">Apply from solved</button>
-            <button type="button" data-alg-clear style="height:36px;padding:0 12px;border-radius:10px;border:1px solid #E4E1DA;color:#6E6A61;font-size:12px;font-weight:500;">Clear</button>
-          </div>
-          <div id="custom-algorithm-help" style="font-size:10.5px;color:#66635C;margin-top:7px;line-height:1.45;">Use U D L R F B, optional prime/2, and wide turns such as Rw or 3Rw. Wide turns are available on 4×4 and larger.</div>
-
-          <div style="height:1px;background:#F1EFEA;margin:14px 0;"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-            <label style="font-size:10.5px;font-weight:600;color:#6E6A61;">TURN WIDTH
-              <select data-turn-width style="display:block;width:100%;height:34px;margin-top:6px;border:1px solid #DEDAD2;border-radius:9px;background:#FBFBF9;color:#1A1A18;padding:0 8px;font-size:12px;"></select>
-            </label>
-            <div>
-              <div style="font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">TURN AMOUNT</div>
-              <div style="display:flex;background:#F1F0EC;border-radius:9px;padding:3px;gap:2px;">
-                <button type="button" data-turn-amount="1" aria-pressed="true" aria-label="Clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">90°</button>
-                <button type="button" data-turn-amount="-1" aria-pressed="false" aria-label="Counter-clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">−90°</button>
-                <button type="button" data-turn-amount="2" aria-pressed="false" aria-label="Half turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">180°</button>
-              </div>
-            </div>
-          </div>
-          <div data-face-turns style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
-            <button type="button" data-turn-face="U" aria-label="Turn Up face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">U</button>
-            <button type="button" data-turn-face="D" aria-label="Turn Down face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">D</button>
-            <button type="button" data-turn-face="L" aria-label="Turn Left face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">L</button>
-            <button type="button" data-turn-face="R" aria-label="Turn Right face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">R</button>
-            <button type="button" data-turn-face="F" aria-label="Turn Front face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">F</button>
-            <button type="button" data-turn-face="B" aria-label="Turn Back face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">B</button>
-          </div>
-          <button type="button" data-turn-undo style="width:100%;height:32px;margin-top:8px;border-radius:9px;color:#66635C;font-size:11.5px;border:1px solid #D8D5CE;">Undo last manual turn</button>
-        </div>
-
         <!-- actions -->
         <div style="display:flex;flex-direction:column;gap:9px;">
           <button data-act-solve data-onclick="onSolve" style="height:52px;border-radius:15px;background:#161514;color:#fff;font-size:15px;font-weight:600;letter-spacing:-.01em;box-shadow:0 6px 18px -6px rgba(20,20,18,.5);transition:.16s;display:flex;align-items:center;justify-content:center;gap:9px;">
@@ -289,6 +246,49 @@ html.android [data-size-note]{font-size:12px!important}
           <div data-sol-chips style="display:flex;flex-wrap:wrap;gap:5px;max-height:96px;overflow-y:auto;">
             <span style="font-size:12.5px;color:#B7B3AA;">Solve a scramble to see the winning path.</span>
           </div>
+        </div>
+
+        <!-- custom scramble builder -->
+        <div data-custom-scramble style="background:#fff;border:1px solid #ECEAE4;border-radius:18px;box-shadow:0 1px 2px rgba(20,20,18,.04);padding:18px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px;">
+            <div>
+              <div style="font-size:11px;font-weight:600;letter-spacing:.09em;color:#66635C;">BUILD YOUR SCRAMBLE</div>
+              <div style="font-size:11px;color:#66635C;margin-top:4px;line-height:1.4;">Type an algorithm or turn faces yourself.</div>
+            </div>
+            <span data-custom-count style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#1573E6;white-space:nowrap;">0 moves</span>
+          </div>
+          <label for="custom-algorithm" style="display:block;font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">MOVE NOTATION</label>
+          <textarea id="custom-algorithm" data-alg-input rows="2" spellcheck="false" aria-describedby="custom-algorithm-help custom-algorithm-error" placeholder="R U R' U'  ·  3Rw2 F2" style="width:100%;resize:vertical;min-height:58px;border:1px solid #DEDAD2;border-radius:11px;padding:10px 11px;background:#FBFBF9;color:#1A1A18;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
+          <div id="custom-algorithm-error" data-alg-error role="alert" style="display:none;margin-top:7px;color:#A23B3B;font-size:11px;line-height:1.4;"></div>
+          <div style="display:flex;gap:8px;margin-top:9px;">
+            <button type="button" data-alg-apply style="flex:1;height:36px;border-radius:10px;background:#161514;color:#fff;font-size:12px;font-weight:600;">Apply from solved</button>
+            <button type="button" data-alg-clear style="height:36px;padding:0 12px;border-radius:10px;border:1px solid #E4E1DA;color:#6E6A61;font-size:12px;font-weight:500;">Clear</button>
+          </div>
+          <div id="custom-algorithm-help" style="font-size:10.5px;color:#66635C;margin-top:7px;line-height:1.45;">Use U D L R F B, optional prime/2, and wide turns such as Rw or 3Rw. Wide turns are available on 4×4 and larger.</div>
+
+          <div style="height:1px;background:#F1EFEA;margin:14px 0;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <label style="font-size:10.5px;font-weight:600;color:#6E6A61;">TURN WIDTH
+              <select data-turn-width style="display:block;width:100%;height:34px;margin-top:6px;border:1px solid #DEDAD2;border-radius:9px;background:#FBFBF9;color:#1A1A18;padding:0 8px;font-size:12px;"></select>
+            </label>
+            <div>
+              <div style="font-size:10.5px;font-weight:600;color:#6E6A61;margin-bottom:6px;">TURN AMOUNT</div>
+              <div style="display:flex;background:#F1F0EC;border-radius:9px;padding:3px;gap:2px;">
+                <button type="button" data-turn-amount="1" aria-pressed="true" aria-label="Clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">90°</button>
+                <button type="button" data-turn-amount="-1" aria-pressed="false" aria-label="Counter-clockwise quarter turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">−90°</button>
+                <button type="button" data-turn-amount="2" aria-pressed="false" aria-label="Half turn" style="flex:1;height:28px;border-radius:7px;font-family:'JetBrains Mono',monospace;font-size:12px;">180°</button>
+              </div>
+            </div>
+          </div>
+          <div data-face-turns style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
+            <button type="button" data-turn-face="U" aria-label="Turn Up face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">U</button>
+            <button type="button" data-turn-face="D" aria-label="Turn Down face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">D</button>
+            <button type="button" data-turn-face="L" aria-label="Turn Left face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">L</button>
+            <button type="button" data-turn-face="R" aria-label="Turn Right face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">R</button>
+            <button type="button" data-turn-face="F" aria-label="Turn Front face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">F</button>
+            <button type="button" data-turn-face="B" aria-label="Turn Back face" style="height:36px;border-radius:9px;background:#F4F3EF;font-family:'JetBrains Mono',monospace;font-weight:600;">B</button>
+          </div>
+          <button type="button" data-turn-undo style="width:100%;height:32px;margin-top:8px;border-radius:9px;color:#66635C;font-size:11.5px;border:1px solid #D8D5CE;">Undo last manual turn</button>
         </div>
 
       </aside>
