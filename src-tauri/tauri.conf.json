@@ -47,7 +47,7 @@
       "gullicube-bundle/": "gullicube-runtime/"
     },
     "category": "Education",
-    "shortDescription": "Replay-verified N×N cube solver studio",
-    "longDescription": "Build random or custom 2×2–11×11 scrambles, solve with RCube on desktop or Rust/WASM in the browser, replay every accepted path, and watch the verified moves animate in 3D."
+    "shortDescription": "N×N cube solver studio",
+        "longDescription": "Build random or custom scrambles, solve with RCube on desktop or Rust/WASM in the browser, replay the solution (independently checked up to 21×21), and watch the moves animate in 3D."
   }
 }

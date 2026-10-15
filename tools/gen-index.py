@@ -18,7 +18,7 @@ assert _scramble_status in js
 js = js.replace(_scramble_status, "if (cur) { if (this.ui.status.textContent !== 'Scrambling') this.ui.status.textContent = 'Scrambling';")
 _replay_status = "if (cur) { this.ui.status.textContent = 'Solving';"
 assert _replay_status in js
-js = js.replace(_replay_status, "if (cur) { const solveStatus = this._lastSolveTelemetry?.verified ? 'Replaying verified solution' : 'Solving'; if (this.ui.status.textContent !== solveStatus) this.ui.status.textContent = solveStatus;")
+js = js.replace(_replay_status, "if (cur) { const solveStatus = this._lastSolveTelemetry?.verified ? 'Replaying verified solution' : this._lastSolveTelemetry?.trusted ? 'Replaying solution (replay check skipped)' : 'Solving'; if (this.ui.status.textContent !== solveStatus) this.ui.status.textContent = solveStatus;")
 
 body = re.sub(r'ref="\{\{\s*rootRef\s*\}\}"', 'data-dcref="rootRef"', body)
 body = re.sub(r'onClick="\{\{\s*(\w+)\s*\}\}"', r'data-onclick="\1"', body)
@@ -26,6 +26,7 @@ body = re.sub(r'onChange="\{\{\s*(\w+)\s*\}\}"', r'data-onchange="\1"', body)
 assert '{{' not in body
 
 SHIM = r'''
+  function isTrustedResult(self){ var t = self && self._lastSolveTelemetry; return !!(t && t.trusted); }
   class DCLogic {
     constructor(props){ this.props = props || {}; this.state = {}; }
     q(sel){ return (this.root || document).querySelector(sel); }
@@ -112,7 +113,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           }):this.lastSolution;
         }
         this.solveTexture();
-        if(this.ui&&this.ui.status)this.ui.status.textContent='Replaying verified solution';
+        if(this.ui&&this.ui.status)this.ui.status.textContent=isTrustedResult(this)?'Replaying solution (replay check skipped)':'Replaying verified solution';
         return;
       }
       // Keep the Rust-side state at the replay target while the visible cube animates.
@@ -395,7 +396,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         return;
       }
       if (this.mode==='texture'&&isNativeWinner(this.realWinner)&&this.hasSolution){
-        if(this.ui&&this.ui.status)this.ui.status.textContent='The verified move sequence was replayed; notation is omitted for this large cube.';
+        if(this.ui&&this.ui.status)this.ui.status.textContent=(isTrustedResult(this)?'The move sequence was replayed without an independent check; ':'The verified move sequence was replayed; ')+'notation is omitted for this large cube.';
         return;
       }
       return origCopyPath();
@@ -515,7 +516,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self._replayElapsedLabel = elapsedLabel(elapsed);
       if (self.mode === 'texture'){
         var stat = self.root.querySelector('[data-lane="' + (self.realWinner === 'gullicube' ? 'beam' : 'det') + '"] [data-stat]');
-        if (stat) stat.textContent='verified · replay '+(self.movesDone||0).toLocaleString()+' / '+(self.totalMoves||0).toLocaleString()+' · elapsed '+self._replayElapsedLabel;
+        if (stat) stat.textContent=(isTrustedResult(self)?'unverified':'verified')+' · replay '+(self.movesDone||0).toLocaleString()+' / '+(self.totalMoves||0).toLocaleString()+' · elapsed '+self._replayElapsedLabel;
       }
     }
     function updateReplayActivity(self){
@@ -606,7 +607,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       // Fail closed if state is ever forced outside the active platform's verified
       // range. The product no longer offers an inverse-playback "visual solve".
       if ((this.mode !== 'cubie' && !hasNativeReduction(this)) || this.n > SOLVE_MAX_N || !this.lab){
-        if (this.ui && this.ui.status) this.ui.status.textContent = 'This cube size is not supported by the verified solver';
+        if (this.ui && this.ui.status) this.ui.status.textContent = 'This cube size is not supported by the solver';
         return;
       }
       // Solve must always do something. On a fresh / already-solved cube
@@ -776,10 +777,10 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       }
       var compactNativeTextureResult=!!(res&&res.solvedByRcube&&res.compactMoves&&self.mode==='texture');
       if (!res || !res.found || !res.moves || !res.moves.length){
-        self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No verified solution within budget' };
+        self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:false, error:(data && data.error) || 'No solution within budget' };
         if (self.ui && self.ui.status) self.ui.status.textContent = data && data.error
           ? ('Solver stopped: ' + data.error)
-          : 'No verified solution within budget — lower the scramble depth';
+          : 'No solution within budget — lower the scramble depth';
         lanesUpdate(self, (res && res.lanes) || [], null, 0);
         if (self.syncControls) self.syncControls();
         return;
@@ -841,7 +842,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           return;
         }
       }
-      self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:true, moveCount:res.moveCount, winner:res.winner };
+      self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:!compactNativeTextureResult, trusted:compactNativeTextureResult, moveCount:res.moveCount, winner:res.winner };
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
       self.lastSolution = res.moves;
       // res.moveCount is the face-turn (HTM) count; res.moves is the half-turn-
@@ -974,9 +975,9 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       if (!p || !body) return;
       var cmp = (solutionLen < scrambleLen)
         ? ('<b>'+solutionLen+' moves</b> — shorter than the '+scrambleLen+'-move scramble, so it cannot be replaying it.')
-        : ('<b>'+solutionLen+' moves</b> from the state alone — a fresh, verified path, not the scramble inverse.');
+        : ('<b>'+solutionLen+' moves</b> from the state alone — a fresh'+(isTrustedResult(self)?'':', verified')+' path, not the scramble inverse.');
       var stickerCount = 6 * self.n * self.n;
-      body.innerHTML = 'The scramble move history was withheld from the worker. It received only the cube state ('+stickerCount+' sticker colours) and searched for its own verified path: '+cmp;
+      body.innerHTML = 'The scramble move history was withheld from the worker. It received only the cube state ('+stickerCount+' sticker colours) and searched for its own'+(isTrustedResult(self)?'':' verified')+' path: '+cmp;
       p.style.display='block';
     }
 
@@ -1082,7 +1083,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       if (self.ui&&self.ui.status) self.ui.status.textContent=solved?'Custom turns return to solved':(label||'Custom scramble ready to solve');
       if (self.ui&&self.ui.solCount) self.ui.solCount.textContent='—';
       var solutionTime=self.root.querySelector('[data-sol-time]'); if(solutionTime)solutionTime.textContent='';
-      if (self.ui&&self.ui.solChips) self.ui.solChips.innerHTML='<span style="font-size:12.5px;color:#66635C;">Solve this custom scramble to see a verified path.</span>';
+      if (self.ui&&self.ui.solChips) self.ui.solChips.innerHTML='<span style="font-size:12.5px;color:#66635C;">Solve this custom scramble to see a solution path.</span>';
       if (self.syncControls) self.syncControls();
       refreshCustomScramble(self);
     }
@@ -1141,7 +1142,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self.sliderToN=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
       self.nToSlider=function(value){ return Math.max(2,Math.min(SOLVE_MAX_N,Math.round(Number(value)||2))); };
       var note=self.root.querySelector('[data-size-note]');
-      if(note) note.innerHTML='Only replay-verified sizes are offered. <b>'+(nativeCore()?'Desktop':'Browser')+': 2×2–'+SOLVE_MAX_N+'×'+SOLVE_MAX_N+'.</b> Larger cubes are hidden because their runtime and memory costs are not yet reliable enough for a product promise.';
+      if(note) note.innerHTML='Only supported sizes are offered. <b>'+(nativeCore()?'Desktop':'Browser')+': 2×2–'+SOLVE_MAX_N+'×'+SOLVE_MAX_N+'.</b> Larger cubes are hidden because their runtime and memory costs are not yet reliable enough for a product promise.';
       if (self.n>SOLVE_MAX_N) self.setN(SOLVE_MAX_N);
     }
     function wireCustomScramble(self){
@@ -1260,13 +1261,13 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       }
       if (n > SOLVE_MAX_N){
         ban.style.cssText = ban._base + 'background:#FCEEEE;color:#973B3B;border-color:#EDCACA;';
-        ban.innerHTML = '<b>Unsupported size.</b> Choose 2×2 through '+SOLVE_MAX_N+'×'+SOLVE_MAX_N+' so every Solve result can be independently replay-verified.';
+        ban.innerHTML = '<b>Unsupported size.</b> Choose 2×2 through '+SOLVE_MAX_N+'×'+SOLVE_MAX_N+' so Solve results stay within the tested range.';
       } else if (n === 2 && d > SOLVE_MAX_DEPTH){
         ban.style.cssText = ban._base + 'background:#FBF4E8;color:#9A6A1E;border-color:#F0E0C2;';
         ban.innerHTML = '<b>Deep scramble (depth '+d+').</b> The exact solver may run out of budget. Keep depth ≤ '+SOLVE_MAX_DEPTH+' for a guaranteed solve.';
       } else {
         ban.style.cssText = ban._base + 'background:#F1F8F0;color:#3F7A3A;border-color:#D9EAD5;';
-        ban.innerHTML = '<b>Ready to solve.</b> Press <b>Scramble</b>, then <b>Solve</b> — the engines below find a verified solution and play it back.';
+        ban.innerHTML = '<b>Ready to solve.</b> Press <b>Scramble</b>, then <b>Solve</b> — the engines below find a solution and play it back.';
       }
     }
     inst._refreshSolvability = refreshSolvability;
@@ -1374,7 +1375,7 @@ BOOT = r'''  function bindAndMount(){
   }
   function lockUntilSolverReady(inst){
     const originals={solve:inst.solve,scramble:inst.scramble,replay:inst.replay,setN:inst.setN};
-    inst._solverReady=false; inst._solverLoadMessage='Loading verified solver…';
+    inst._solverReady=false; inst._solverLoadMessage='Loading solver…';
     const blocked=function(){ if(inst.ui&&inst.ui.status)inst.ui.status.textContent=inst._solverLoadMessage; };
     inst.solve=blocked; inst.scramble=blocked; inst.replay=blocked; inst.setN=blocked;
     const selector='[data-act-solve],[data-act-scramble],[data-act-replay],[data-inc],[data-dec],[data-nslider],[data-n-input],[data-alg-input],[data-alg-apply],[data-alg-clear],[data-turn-width],[data-turn-amount],[data-turn-face],[data-turn-undo]';
