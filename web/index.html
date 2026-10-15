@@ -653,14 +653,31 @@ class Component extends DCLogic {
       face.tex.needsUpdate = true;
       return;
     }
-    ctx.fillStyle = '#0a0b0d'; ctx.fillRect(0, 0, S, S);
-    const gap = Math.max(0.5, cell * 0.09), rad = Math.min(cell * 0.2, 7);
-    for (let row = 0; row < d; row++) for (let col = 0; col < d; col++) {
-      const rank = row * d + col;
-      ctx.fillStyle = this.faceList[rank < k ? face.solvedColor : face.scr[rank]];
-      const x = col * cell + gap, y = row * cell + gap, w = cell - gap * 2, h = cell - gap * 2;
-      this.roundRect(ctx, x, y, w, h, Math.min(rad, w / 2)); ctx.fill();
+    // The grid (dark lines with rounded sticker holes) is rendered once per face
+    // into a mask; each redraw only writes d*d pixels and composites two images.
+    if (!face.mask) {
+      const mask = document.createElement('canvas'); mask.width = mask.height = S;
+      const mctx = mask.getContext('2d');
+      mctx.fillStyle = '#0a0b0d'; mctx.fillRect(0, 0, S, S);
+      mctx.globalCompositeOperation = 'destination-out'; mctx.fillStyle = '#000';
+      const gap = Math.max(0.5, cell * 0.09), rad = Math.min(cell * 0.2, 7);
+      for (let row = 0; row < d; row++) for (let col = 0; col < d; col++) {
+        const w = cell - gap * 2, h = cell - gap * 2;
+        this.roundRect(mctx, col * cell + gap, row * cell + gap, w, h, Math.min(rad, w / 2)); mctx.fill();
+      }
+      const small = document.createElement('canvas'); small.width = small.height = d;
+      face.mask = mask; face.small = small; face.sctx = small.getContext('2d');
+      face.simg = face.sctx.createImageData(d, d);
     }
+    const px = face.simg.data, palette = face.palette;
+    for (let rank = 0; rank < total; rank++) {
+      const c = palette[rank < k ? face.solvedColor : face.scr[rank]], o = rank * 4;
+      px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
+    }
+    face.sctx.putImageData(face.simg, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(face.small, 0, 0, S, S);
+    ctx.drawImage(face.mask, 0, 0);
     face.tex.needsUpdate = true;
   }
 
