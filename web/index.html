@@ -1707,11 +1707,12 @@ class Component extends DCLogic {
       if (!self._solvePending) return;
       var elapsed = performance.now() - (self._solveStartedAt || performance.now());
       self._solveElapsedMs = elapsed;
-      var engine = self._solveDispatch === 'native' ? 'Native RCube engine' :
+      var pickedSolver = self._solveDispatch === 'native' ? currentSolver(self) : '';
+      var engine = self._solveDispatch === 'native' ?
+                     (pickedSolver === 'gullicube' ? 'Gullicube' : pickedSolver === 'competition' ? 'RCube + Gullicube' : 'RCube') :
                    self._solveDispatch === 'worker' ? 'WASM solver' : 'Solver';
       var estimatedProgress = (self._solveDispatch === 'native' || self._solveDispatch === 'worker') &&
         Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null;
-      var pickedSolver = self._solveDispatch === 'native' ? currentSolver(self) : '';
       var estimateName = self._solveDispatch === 'native' ? (pickedSolver === 'gullicube' ? 'Gullicube' : pickedSolver === 'competition' ? 'RCube + Gullicube' : 'RCube') : 'WASM reduction';
       var statusKey = engine+':'+self.n+':'+(estimatedProgress === null ? 'active' : estimatedProgress);
       if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
