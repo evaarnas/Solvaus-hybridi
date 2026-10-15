@@ -46,9 +46,9 @@ Once published, assets are immutable under this policy. Any later signed build u
 A complete draft contains exactly these three packages:
 
 ```text
-Cube-Solver-vX.Y.Z-linux-x86_64.flatpak
-Cube-Solver-vX.Y.Z-macos-universal.dmg
-Cube-Solver-vX.Y.Z-windows-x86_64-setup.exe
+Solvaus-vX.Y.Z-linux-x86_64.flatpak
+Solvaus-vX.Y.Z-macos-universal.dmg
+Solvaus-vX.Y.Z-windows-x86_64-setup.exe
 ```
 
 It also includes:

@@ -243,7 +243,7 @@ jobs:
           FLATPAK_BRANCH=stable
           RUNTIME_VERSION=50
           PACK_DIR="$RUNNER_TEMP/flatpak-input"
-          BUNDLE="dist/Cube-Solver-$RELEASE_TAG-linux-x86_64.flatpak"
+          BUNDLE="dist/Solvaus-$RELEASE_TAG-linux-x86_64.flatpak"
           mkdir -p dist
           mapfile -t debs < <(find src-tauri/target/${{ matrix.target }}/release/bundle/deb -maxdepth 1 -type f -name '*.deb')
           [[ ${#debs[@]} -eq 1 ]] || { echo "expected one intermediate deb; got ${#debs[@]}" >&2; exit 1; }
@@ -257,11 +257,11 @@ jobs:
           deb_binary="$(find /tmp/cube-deb -type f -name cube-solver -perm -111 -print -quit)"
           [[ -n "$deb_binary" ]] || { echo 'intermediate deb payload is missing cube-solver' >&2; exit 1; }
           set +e
-          WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 12s xvfb-run -a "$deb_binary" >/tmp/cube-solver-deb.log 2>&1
+          WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 12s xvfb-run -a "$deb_binary" >/tmp/Solvaus-deb.log 2>&1
           rc=$?
           set -e
           if [[ $rc -ne 124 && $rc -ne 143 ]]; then
-            cat /tmp/cube-solver-deb.log
+            cat /tmp/Solvaus-deb.log
             echo "intermediate deb exited during startup smoke (code $rc)" >&2
             exit 1
           fi
@@ -288,17 +288,17 @@ jobs:
           [[ "$(flatpak info --user --show-ref "$APP_ID")" == "app/$APP_ID/x86_64/$FLATPAK_BRANCH" ]]
           [[ "$(flatpak info --user --show-runtime "$APP_ID")" == "org.gnome.Platform/x86_64/$RUNTIME_VERSION" ]]
           flatpak run --user --command=sh "$APP_ID" -c \
-            'ldd /app/bin/cube-solver > /tmp/cube-solver-ldd.txt; cat /tmp/cube-solver-ldd.txt; ! grep -F "not found" /tmp/cube-solver-ldd.txt'
-          flatpak info --user --show-permissions "$APP_ID" | tee /tmp/cube-solver-flatpak-permissions.txt
-          ! grep -Eq 'shared=.*network|filesystems=.*home' /tmp/cube-solver-flatpak-permissions.txt
+            'ldd /app/bin/cube-solver > /tmp/Solvaus-ldd.txt; cat /tmp/Solvaus-ldd.txt; ! grep -F "not found" /tmp/Solvaus-ldd.txt'
+          flatpak info --user --show-permissions "$APP_ID" | tee /tmp/Solvaus-flatpak-permissions.txt
+          ! grep -Eq 'shared=.*network|filesystems=.*home' /tmp/Solvaus-flatpak-permissions.txt
           set +e
           dbus-run-session -- xvfb-run -a sh -c \
             "WEBKIT_DISABLE_COMPOSITING_MODE=1 timeout 12s flatpak run --user $APP_ID" \
-            >/tmp/cube-solver-flatpak.log 2>&1
+            >/tmp/Solvaus-flatpak.log 2>&1
           rc=$?
           set -e
           if [[ $rc -ne 124 && $rc -ne 143 ]]; then
-            cat /tmp/cube-solver-flatpak.log
+            cat /tmp/Solvaus-flatpak.log
             echo "Flatpak exited during startup smoke (code $rc)" >&2
             exit 1
           fi
@@ -325,7 +325,7 @@ jobs:
             exit 1
           }
           smoke_app() {
-            local candidate="$1" label="$2" log="/tmp/cube-solver-${2}.log"
+            local candidate="$1" label="$2" log="/tmp/Solvaus-${2}.log"
             "$candidate/Contents/MacOS/cube-solver" >"$log" 2>&1 &
             local pid=$!
             sleep 10
@@ -363,7 +363,7 @@ jobs:
           smoke_app "$dmg_app" dmg
           hdiutil detach /tmp/cube-dmg -force
           trap - EXIT
-          cp "${dmgs[0]}" "dist/Cube-Solver-$RELEASE_TAG-macos-universal.dmg"
+          cp "${dmgs[0]}" "dist/Solvaus-$RELEASE_TAG-macos-universal.dmg"
           file dist/*
 
       - name: Validate and stage Windows NSIS executable
@@ -408,7 +408,7 @@ jobs:
           Assert-X64Version $nsisBinary.FullName 'NSIS payload'
           Assert-StaysAlive $nsisBinary.FullName 'NSIS payload'
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item $nsis[0].FullName "dist/Cube-Solver-$env:RELEASE_TAG-windows-x86_64-setup.exe"
+          Copy-Item $nsis[0].FullName "dist/Solvaus-$env:RELEASE_TAG-windows-x86_64-setup.exe"
           Get-FileHash dist/* -Algorithm SHA256 | Format-Table
 
       - name: Write per-platform build metadata
@@ -475,9 +475,9 @@ jobs:
           root = pathlib.Path('dist')
           tag = os.environ['RELEASE_TAG']
           expected = {
-              f'Cube-Solver-{tag}-linux-x86_64.flatpak',
-              f'Cube-Solver-{tag}-macos-universal.dmg',
-              f'Cube-Solver-{tag}-windows-x86_64-setup.exe',
+              f'Solvaus-{tag}-linux-x86_64.flatpak',
+              f'Solvaus-{tag}-macos-universal.dmg',
+              f'Solvaus-{tag}-windows-x86_64-setup.exe',
           }
           expected_metadata = {
               'build-metadata-release-linux-x86_64.json': 'x86_64-unknown-linux-gnu',
