@@ -70,7 +70,11 @@ jobs:
 
       - name: Generate the Android project
         working-directory: src-tauri
-        run: cargo tauri android init --ci
+        run: |
+          cargo tauri android init --ci
+          # Gullicube ships as a libgullicube.so executable; it must be extracted to disk to run.
+          sed -i 's/<application/<application android:extractNativeLibs="true"/' gen/android/app/src/main/AndroidManifest.xml
+          grep -n extractNativeLibs gen/android/app/src/main/AndroidManifest.xml
 
       - name: Build the APK
         working-directory: src-tauri

@@ -105,6 +105,7 @@ fn build_rcube() {
 fn build_gullicube() {
     use std::path::PathBuf;
 
+    let android = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "android");
     let root = Path::new("gullicube");
     let sources = [
         "src/full/gullicube.cpp",
@@ -180,7 +181,7 @@ fn build_gullicube() {
             cmd
         }
     };
-    if cfg!(target_os = "macos") {
+    if cfg!(target_os = "macos") && !android {
         // Apple's clang emits one fat binary, so the universal app runs on both CPUs.
         command.args(["-arch", "arm64", "-arch", "x86_64"]);
     }
@@ -197,7 +198,12 @@ fn build_gullicube() {
     if cfg!(windows) {
         command.arg("-static");
     }
-    command.arg("-lpthread");
+    if android {
+        // Bionic has pthreads built in; link libc++ statically so the executable is standalone.
+        command.args(["-static-libstdc++", "-pie"]);
+    } else {
+        command.arg("-lpthread");
+    }
     match command.output() {
         Ok(output) if output.status.success() => {}
         other => {
@@ -215,6 +221,24 @@ fn build_gullicube() {
     }
 
     // A running app keeps the old executable locked; keep it rather than failing the build.
+    if android {
+        // Android only executes files from the app's native library directory, so ship the
+        // executable as a "library" in jniLibs (the data files are embedded in the app).
+        let abi = match std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+            Ok("aarch64") => "arm64-v8a",
+            Ok("arm") => "armeabi-v7a",
+            Ok("x86_64") => "x86_64",
+            Ok("x86") => "x86",
+            _ => return,
+        };
+        let jni = Path::new("gen/android/app/src/main/jniLibs").join(abi);
+        if std::fs::create_dir_all(&jni).is_ok() {
+            if let Err(error) = std::fs::copy(&built, jni.join("libgullicube.so")) {
+                println!("cargo:warning=could not stage Gullicube for Android: {error}");
+            }
+        }
+        return;
+    }
     if let Err(error) = std::fs::copy(&built, &exe) {
         println!(
             "cargo:warning=could not update {} ({error}); close the running app and rebuild",
@@ -263,9 +287,9 @@ fn main() {
         Path::new(BUNDLE_STAGE).join("README.txt"),
         "Staged by build.rs\n",
     );
-    // Gullicube is a host executable located at run time; mobile targets can't ship it.
+    // Gullicube cannot be built for iOS (no child processes); on Android it ships as a jniLib.
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os != "android" && target_os != "ios" {
+    if target_os != "ios" {
         build_gullicube();
     }
     tauri_build::build()

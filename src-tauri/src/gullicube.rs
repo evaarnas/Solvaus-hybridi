@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(not(target_os = "android"))]
 const EXE_NAME: &str = if cfg!(windows) {
     "gullicube.exe"
 } else {
@@ -30,6 +31,7 @@ pub const MISSING_MESSAGE: &str =
 /// Practical ceiling for the app: gullicube needs about 3 GB and is time-budgeted.
 pub const MAX_SIZE: usize = 1001;
 
+#[cfg(not(target_os = "android"))]
 fn candidate_dirs() -> Vec<PathBuf> {
     let mut starts = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
@@ -59,6 +61,7 @@ fn candidate_dirs() -> Vec<PathBuf> {
 /// `SOLVAUS_GULLICUBE` (path to the executable), else `gullicube[.exe]` in or
 /// beside the app directory or any of its first few ancestors, else a sibling
 /// `gullicube/` checkout of the repository.
+#[cfg(not(target_os = "android"))]
 pub fn locate() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("SOLVAUS_GULLICUBE") {
         let path = PathBuf::from(path);
@@ -68,6 +71,78 @@ pub fn locate() -> Option<PathBuf> {
         .into_iter()
         .map(|dir| dir.join(EXE_NAME))
         .find(|path| path.is_file() && path.parent().is_some_and(|dir| dir.join("data").is_dir()))
+}
+
+#[cfg(target_os = "android")]
+pub fn locate() -> Option<PathBuf> {
+    android::exe()
+}
+
+/// Android runs the solver from the APK's native library directory (the only place apps may
+/// execute files from) and unpacks the embedded data tables into private storage on first use.
+#[cfg(target_os = "android")]
+mod android {
+    use std::path::PathBuf;
+
+    macro_rules! data_files {
+        ($($name:literal),* $(,)?) => {
+            &[$(($name, include_bytes!(concat!("../gullicube/data/", $name)) as &[u8])),*]
+        };
+    }
+    const DATA: &[(&str, &[u8])] = data_files!(
+        "c12x.cls",
+        "diag2.cls",
+        "diag3.cls",
+        "diag_x10.cls",
+        "eg8.cls",
+        "fast6.cls",
+        "mid2.cls",
+        "mid3.cls",
+        "mid_x10.cls",
+        "p8s10.cls",
+        "p9.cls",
+        "pair3.cls",
+        "wing3.cls",
+        "wing_d6c.cls",
+    );
+
+    pub fn exe() -> Option<PathBuf> {
+        let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
+        let lib = maps
+            .lines()
+            .filter_map(|line| line.split_whitespace().last())
+            .find(|path| path.ends_with("/libcube_solver_lib.so"))?;
+        let exe = PathBuf::from(lib).with_file_name("libgullicube.so");
+        exe.is_file().then_some(exe)
+    }
+
+    /// Directory that holds `data/`; the solver finds its tables relative to its argv[0].
+    pub fn prepare() -> Result<PathBuf, String> {
+        let cmdline = std::fs::read("/proc/self/cmdline").map_err(|e| e.to_string())?;
+        let package = String::from_utf8_lossy(cmdline.split(|b| *b == 0).next().unwrap_or(&[]))
+            .split(':')
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        if package.is_empty() {
+            return Err("could not determine the app package".to_string());
+        }
+        let dir = PathBuf::from("/data/data")
+            .join(package)
+            .join("files")
+            .join("gullicube");
+        let data = dir.join("data");
+        std::fs::create_dir_all(&data).map_err(|e| format!("could not create {}: {e}", data.display()))?;
+        for (name, bytes) in DATA {
+            let path = data.join(name);
+            let current = path.metadata().map(|m| m.len()).unwrap_or(0);
+            if current != bytes.len() as u64 {
+                std::fs::write(&path, bytes)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+            }
+        }
+        Ok(dir)
+    }
 }
 
 pub fn is_available() -> bool {
@@ -155,6 +230,12 @@ pub fn solve(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(target_os = "android")]
+    {
+        use std::os::unix::process::CommandExt;
+        let dir = android::prepare()?;
+        command.current_dir(&dir).arg0(dir.join("gullicube"));
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
