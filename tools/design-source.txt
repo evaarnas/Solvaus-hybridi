@@ -303,8 +303,8 @@ class Component extends DCLogic {
 
   scrollToTopOnAndroid() {
     if (!document.documentElement.classList.contains('android')) return;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (this.root) this.root.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (this.root) this.root.scrollTo({ top: 0, behavior: 'instant' });
   }
 
   renderVals() {
