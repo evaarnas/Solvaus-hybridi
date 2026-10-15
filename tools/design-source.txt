@@ -29,7 +29,32 @@ button:disabled{cursor:not-allowed;opacity:.42}
   .cube-viewport{min-height:55vh}
   .control-rail{width:100%!important;overflow:visible!important}
 }
+/* Android-only layout (class set below); desktop and other browsers are untouched. */
+html.android body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+html.android .app-shell{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+html.android .topbar{min-height:44px!important;padding:6px 12px!important}
+html.android .topbar span[style*="10.5px"],html.android .topbar > div:last-child > span{display:none!important}
+html.android .topbar [data-spin]{padding:10px!important}
+html.android .studio-layout{padding:8px!important;gap:10px!important;min-height:0!important}
+html.android .cube-viewport{min-height:0!important;height:min(58vw + 90px,52vh);border-radius:16px!important;position:sticky!important;top:0;z-index:5;flex:none!important}
+html.android .cube-viewport [data-stage]{touch-action:none}
+html.android .cube-viewport > div[style*="bottom:16px"]{display:none!important}
+html.android .cube-viewport > div[style*="top:14px"]{transform:scale(.62);transform-origin:top right}
+html.android .cube-viewport > div[style*="bottom:26px"]{bottom:12px!important;max-width:calc(100% - 20px)}
+html.android .control-rail{gap:10px!important;padding-right:0!important}
+html.android .control-rail > div{padding:14px!important}
+html.android .control-rail button{min-height:44px}
+html.android .control-rail input[type=range]{height:28px!important}
+html.android .control-rail input[type=number]{height:40px!important;font-size:16px!important}
+html.android [data-size-note]{font-size:12px!important}
+@media (orientation:landscape) and (max-height:520px){
+  html.android .studio-layout{flex-direction:row!important}
+  html.android .app-shell{height:100vh!important;overflow:hidden!important}
+  html.android .cube-viewport{position:relative!important;height:auto!important;flex:1!important}
+  html.android .control-rail{width:44%!important;overflow-y:auto!important}
+}
 </style>
+<script>if(/Android/i.test(navigator.userAgent))document.documentElement.classList.add('android')</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </helmet>
 <div ref="{{ rootRef }}" class="app-shell" style="height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#1A1A18;background:radial-gradient(130% 120% at 50% -10%, #FCFCFA 0%, #F2F1ED 62%, #E9E8E2 100%);-webkit-font-smoothing:antialiased;">
@@ -385,7 +410,7 @@ class Component extends DCLogic {
     const stage = this.ui.stage;
     const w = stage.clientWidth || 600, h = stage.clientHeight || 400;
     this.renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, document.documentElement.classList.contains('android') ? 1.5 : 2));
     this.renderer.setSize(w, h);
     this.renderer.outputEncoding = T.sRGBEncoding;
     this.renderer.toneMapping = T.NoToneMapping;
@@ -642,14 +667,31 @@ class Component extends DCLogic {
       face.tex.needsUpdate = true;
       return;
     }
-    ctx.fillStyle = '#0a0b0d'; ctx.fillRect(0, 0, S, S);
-    const gap = Math.max(0.5, cell * 0.09), rad = Math.min(cell * 0.2, 7);
-    for (let row = 0; row < d; row++) for (let col = 0; col < d; col++) {
-      const rank = row * d + col;
-      ctx.fillStyle = this.faceList[rank < k ? face.solvedColor : face.scr[rank]];
-      const x = col * cell + gap, y = row * cell + gap, w = cell - gap * 2, h = cell - gap * 2;
-      this.roundRect(ctx, x, y, w, h, Math.min(rad, w / 2)); ctx.fill();
+    // The grid (dark lines with rounded sticker holes) is rendered once per face
+    // into a mask; each redraw only writes d*d pixels and composites two images.
+    if (!face.mask) {
+      const mask = document.createElement('canvas'); mask.width = mask.height = S;
+      const mctx = mask.getContext('2d');
+      mctx.fillStyle = '#0a0b0d'; mctx.fillRect(0, 0, S, S);
+      mctx.globalCompositeOperation = 'destination-out'; mctx.fillStyle = '#000';
+      const gap = Math.max(0.5, cell * 0.09), rad = Math.min(cell * 0.2, 7);
+      for (let row = 0; row < d; row++) for (let col = 0; col < d; col++) {
+        const w = cell - gap * 2, h = cell - gap * 2;
+        this.roundRect(mctx, col * cell + gap, row * cell + gap, w, h, Math.min(rad, w / 2)); mctx.fill();
+      }
+      const small = document.createElement('canvas'); small.width = small.height = d;
+      face.mask = mask; face.small = small; face.sctx = small.getContext('2d');
+      face.simg = face.sctx.createImageData(d, d);
     }
+    const px = face.simg.data, palette = face.palette;
+    for (let rank = 0; rank < total; rank++) {
+      const c = palette[rank < k ? face.solvedColor : face.scr[rank]], o = rank * 4;
+      px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
+    }
+    face.sctx.putImageData(face.simg, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(face.small, 0, 0, S, S);
+    ctx.drawImage(face.mask, 0, 0);
     face.tex.needsUpdate = true;
   }
 

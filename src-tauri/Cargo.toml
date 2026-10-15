@@ -5,6 +5,10 @@ description = "Solvaus-hybridi — replay-verified N×N cube solver studio"
 authors = ["Adam Nolle"]
 edition = "2021"
 
+[lib]
+name = "cube_solver_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 cc = "1"
 tauri-build = { version = "2", features = [] }

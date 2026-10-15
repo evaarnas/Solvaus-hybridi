@@ -1,0 +1,65 @@
+name: Android app
+
+# Builds an installable Android APK (Tauri 2 mobile). The debug-signed APK can be
+# sideloaded directly; see docs/ANDROID.md for release signing.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NDK_VERSION: "27.0.12077973"
+
+jobs:
+  apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" "platforms;android-34" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target\nsrc-tauri -> src-tauri/target"
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack,tauri-cli
+
+      - name: Verify generated frontend
+        run: python tools/gen-index.py --check
+
+      - name: Generate the Android project
+        working-directory: src-tauri
+        run: cargo tauri android init --ci
+
+      - name: Build the APK
+        working-directory: src-tauri
+        run: cargo tauri android build --debug --apk --target aarch64 --target armv7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solvaus-android-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk

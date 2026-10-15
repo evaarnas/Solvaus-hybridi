@@ -263,6 +263,10 @@ fn main() {
         Path::new(BUNDLE_STAGE).join("README.txt"),
         "Staged by build.rs\n",
     );
-    build_gullicube();
+    // Gullicube is a host executable located at run time; mobile targets can't ship it.
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "android" && target_os != "ios" {
+        build_gullicube();
+    }
     tauri_build::build()
 }

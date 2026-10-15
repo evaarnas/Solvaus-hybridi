@@ -1,6 +1,3 @@
-// Hide the console window on Windows release builds.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 mod gullicube;
 
 use cube_core::{Axis, CubeSize, Move};
@@ -641,7 +638,8 @@ fn cancel_solve(state: State<'_, SolveState>, request_token: String) -> Result<b
     state.cancel(&request_token)
 }
 
-fn main() {
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
     tauri::Builder::default()
         .manage(SolveState::default())
         .invoke_handler(tauri::generate_handler![
