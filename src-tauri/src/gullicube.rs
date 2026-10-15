@@ -132,7 +132,8 @@ mod android {
             .join("files")
             .join("gullicube");
         let data = dir.join("data");
-        std::fs::create_dir_all(&data).map_err(|e| format!("could not create {}: {e}", data.display()))?;
+        std::fs::create_dir_all(&data)
+            .map_err(|e| format!("could not create {}: {e}", data.display()))?;
         for (name, bytes) in DATA {
             let path = data.join(name);
             let current = path.metadata().map(|m| m.len()).unwrap_or(0);
