@@ -9,10 +9,10 @@ Create a legal scramble, solve from the visible stickers alone, and watch the so
 
 <img src="docs/images/studio-1001.png" width="760" alt="Solvaus-hybridi studio showing solving of a scrambled 1001×1001 cube (6,000,002 pieces)">
 
-Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)).
+Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; see [`LICENSE`](LICENSE) and the upstream copy at [`src-tauri/rcube/LICENSE`](src-tauri/rcube/LICENSE) (from [ShellPuppy/RCube](https://github.com/ShellPuppy/RCube)). The vendored [Gullicube](src-tauri/gullicube) solver is licensed GPL-3.0 / MPL-2.0 (see [`LICENSE-GPL.md`](src-tauri/gullicube/LICENSE-GPL.md) and [`LICENSE-MPL.md`](src-tauri/gullicube/LICENSE-MPL.md)).
 
 > [!NOTE]
-> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. Solvaus-hybridi combines the two, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
+> **Credits.** This project is mostly based on two existing projects. [Cube-Solver](https://github.com/AdamNolle/Cube-Solver) by Adam Nolle provides the Rust cube model, solvers, WASM bridge, Three.js studio UI, and animation. **[RCube](https://github.com/ShellPuppy/RCube)** (bundled in [`src-tauri/rcube`](src-tauri/rcube), GPL-3.0) provides the C++ large-cube engine and scrambler used by the native desktop app. **Gullicube** (vendored in [`src-tauri/gullicube`](src-tauri/gullicube), GPL-3.0 / MPL-2.0) is an optional second native solver aimed at shorter solutions. Solvaus-hybridi combines these, adds the Tauri desktop bridge, larger supported sizes, and solve-progress estimates.
 
 [![Rust](https://img.shields.io/badge/core-Rust-dea584.svg)](https://www.rust-lang.org/)
 [![RCube](https://img.shields.io/badge/large--cube-engine-C%2B%2B-blue.svg)](src-tauri/rcube)
@@ -49,7 +49,7 @@ Solvaus-hybridi is distributed under **GPL-3.0** because it integrates RCube; se
 | Browser + desktop | **2×2** | Bounded meet-in-the-middle, beam, and island-GA strategies; shortest verified candidate wins | WASM Worker |
 | Browser + desktop | **3×3** | Two-phase Kociemba-style search | WASM Worker |
 | Standalone browser | **4×4–21×21** | Deterministic reduction | Rust/WASM Worker |
-| Native desktop | **4×4–1001×1001** | RCube scramble and center, corner, and edge engine | Native C++ command thread |
+| Native desktop | **4×4–1001×1001** | RCube scramble and center, corner, and edge engine; optional Gullicube (child process) | Native C++ command thread |
 
 The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop large cubes use RCube, whose center/edge strategy is designed for large N. For native cubes above 21×21, the UI uses RCube's solved-state result directly. Browser builds use the Rust reduction path, with a 570-second solver deadline and a 10-minute UI watchdog for 9×9–21×21. A six-wide-turn 21×21 WASM smoke solve and replay completed in about 67 seconds locally; harder states and slower devices may take longer or time out.
 
@@ -131,6 +131,8 @@ flowchart LR
     UI -->|desktop 4×4–1001×1001 sticker state| Tauri[Tauri native command]
     Worker --> Core[cube_core + cube_solver]
     Tauri --> RCube[RCube C++ engine]
+    Tauri -->|child process| Gulli[Gullicube C++ solver]
+    Gulli -->|move sequence| Core
     RCube -->|"move sequence (through 21×21)"| Core
     RCube -->|"solved-state result (above 21×21)"| UI
     Core --> UI
@@ -142,7 +144,8 @@ flowchart LR
 | `crates/cube_solver` | Two-phase 3×3, bounded 2×2 strategies, EC workers, browser deterministic reduction |
 | `crates/cube_wasm` | WASM bridge and browser sticker-only solve boundary |
 | `src-tauri/rcube` | RCube C++ engine and sticker/move bridge |
-| `src-tauri` | Native desktop shell and cancellable RCube solves |
+| `src-tauri/gullicube` | Vendored Gullicube C++ solver, run as a child process (optional) |
+| `src-tauri` | Native desktop shell and cancellable RCube/Gullicube solves |
 | `tools/design-source.txt` | Authored Studio interface |
 | `tools/gen-index.py` | Generates `web/index.html` and wires the real solver into the interface |
 | `web/solver-worker.js` | Off-main-thread browser/WASM solving |
@@ -158,7 +161,8 @@ flowchart LR
 - [`wasm-pack`](https://rustwasm.github.io/wasm-pack/),
 - [Tauri CLI v2](https://v2.tauri.app/start/prerequisites/),
 - platform-specific Tauri system dependencies,
-- a C++17 compiler for the native RCube engine.
+- a C++17 compiler for the native RCube engine,
+- `g++` or `clang++` on `PATH` (or `GULLICUBE_CXX`) to also build Gullicube; without it the build still succeeds and Gullicube shows as "not installed".
 
 ```sh
 rustup target add wasm32-unknown-unknown
