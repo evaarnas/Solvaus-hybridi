@@ -881,8 +881,11 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         var loserStat = loserLane && loserLane.querySelector('[data-stat]');
         if (loserStat){
           var loserId = res.winner === 'gullicube' ? 'rcube' : 'gullicube';
-          self._nativeLoserLaneStat = {key:loserKey,
-            text:engineName(loserId)+' lost · elapsed '+elapsedLabel(elapsedMs)};
+          var loserResult = res.lanes.find(function(lane){ return lane.id === loserId; });
+          var loserText = loserResult && loserResult.solved
+            ? engineName(loserId)+': '+loserResult.moveCount+' moves · lost · elapsed '+elapsedLabel(elapsedMs)
+            : engineName(loserId)+': '+((loserResult && loserResult.label) || 'no solution');
+          self._nativeLoserLaneStat = {key:loserKey,text:loserText};
         }
       }
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
