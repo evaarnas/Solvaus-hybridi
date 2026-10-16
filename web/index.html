@@ -1718,7 +1718,7 @@ class Component extends DCLogic {
       if (self.ui && self.ui.status && self._solveStatusKey !== statusKey){
         self._solveStatusKey = statusKey;
         var estimateLabel = estimatedProgress === null ? '' : ' · estimated ' + estimatedProgress + '%';
-        self.ui.status.textContent = engine + ' active on ' + self.n + '×' + self.n + estimateLabel + ' · Cancel available';
+        self.ui.status.textContent = engine + ': ' + self.n + '×' + self.n + estimateLabel + ' · Cancel available';
       }
       var badge = self.root.querySelector('[data-solve-elapsed]');
       if (!badge && self.ui && self.ui.status){
