@@ -3,7 +3,7 @@
 The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView loads the same
 `web/` frontend, which applies its compact `html.android` layout.
 
-- **Solvers:** RCube is compiled by the NDK and works natively. Gullicube is compiled by `build.rs`
+- **Solvers:** [RCube](https://github.com/ShellPuppy/RCube) is compiled by the NDK and works natively. [Gullicube](https://github.com/rokicki/gullicube/) is compiled by `build.rs`
   into `libgullicube.so` (an executable placed in `gen/android/app/src/main/jniLibs/<abi>/`, the only
   location Android lets apps run files from); its data tables are embedded in the app and unpacked to
   private storage on first use. The CI workflow enables `useLegacyPackaging` for native libraries so

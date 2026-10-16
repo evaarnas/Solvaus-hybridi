@@ -80,7 +80,7 @@ The assembly job rejects missing, duplicate, empty, symlinked, or unexpected pac
 - no network or home-directory sandbox permission,
 - installation from the final `.flatpak` and startup under Xvfb.
 
-Every desktop release build must also bundle Gullicube. The workflow's "Require bundled Gullicube" step fails the build if the `gullicube` executable and its `data/` folder are not staged under `gullicube-runtime/` next to the app binary, so the build machine needs `g++` or `clang++` (or `GULLICUBE_CXX`). See the README's Solver section for details. The Android build does not ship Gullicube.
+Every desktop release build must also bundle [Gullicube](https://github.com/rokicki/gullicube/). The workflow's "Require bundled Gullicube" step fails the build if the `gullicube` executable and its `data/` folder are not staged under `gullicube-runtime/` next to the app binary, so the build machine needs `g++` or `clang++` (or `GULLICUBE_CXX`). See the README's Solver section for details. The Android build does not ship [Gullicube](https://github.com/rokicki/gullicube/).
 
 A single-file Flatpak contains the application, not the GNOME runtime. Its embedded runtime-repository reference lets Flatpak retrieve that runtime from Flathub when required.
 

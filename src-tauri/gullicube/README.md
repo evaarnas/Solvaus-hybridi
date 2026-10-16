@@ -1,4 +1,4 @@
-# gullicube
+# [gullicube](https://github.com/rokicki/gullicube/)
 
 A solver for the N×N×N cube, named for Gulliver, who travelled between the
 tiny and the giant: it handles cubes from 2×2×2 to thousands of layers, and
