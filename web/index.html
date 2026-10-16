@@ -1381,6 +1381,18 @@ class Component extends DCLogic {
           (!this.lastSolution.length && !(this.mode==='texture'&&this.hasSolution))) return;
       if (!rebuildFromScrambleHistory(this)) return;
       if (this.mode==='texture'){
+        var laneSnapshot = [];
+        if (isNativeWinner(this.realWinner)){
+          ['det','beam','evo'].forEach(function(k){
+            var el = this.root.querySelector('[data-lane="'+k+'"]'); if (!el) return;
+            var fill = el.querySelector('[data-fill]'), pct = el.querySelector('[data-pct2]'),
+                stat = el.querySelector('[data-stat]'), star = el.querySelector('[data-star]');
+            laneSnapshot.push({el:el, fillStyle:fill&&fill.getAttribute('style'), pctText:pct&&pct.textContent,
+              pctStyle:pct&&pct.getAttribute('style'), statText:stat&&stat.textContent,
+              starStyle:star&&star.getAttribute('style'), ariaNow:el.getAttribute('aria-valuenow'),
+              ariaText:el.getAttribute('aria-valuetext')});
+          }, this);
+        }
         this.scrambled=true;
         if (isNativeWinner(this.realWinner)&&this.lastSolution&&this.lastSolution.length){
           this._textureReplayMoves=Array.isArray(this.lastSolution)?this.lastSolution.map(function(m){
@@ -1388,6 +1400,16 @@ class Component extends DCLogic {
           }):this.lastSolution;
         }
         this.solveTexture();
+        laneSnapshot.forEach(function(s){
+          var fill=s.el.querySelector('[data-fill]'), pct=s.el.querySelector('[data-pct2]'),
+              stat=s.el.querySelector('[data-stat]'), star=s.el.querySelector('[data-star]');
+          if (fill){ if (s.fillStyle===null) fill.removeAttribute('style'); else fill.setAttribute('style',s.fillStyle); }
+          if (pct){ pct.textContent=s.pctText; if (s.pctStyle===null) pct.removeAttribute('style'); else pct.setAttribute('style',s.pctStyle); }
+          if (stat) stat.textContent=s.statText;
+          if (star){ if (s.starStyle===null) star.removeAttribute('style'); else star.setAttribute('style',s.starStyle); }
+          if (s.ariaNow===null) s.el.removeAttribute('aria-valuenow'); else s.el.setAttribute('aria-valuenow',s.ariaNow);
+          if (s.ariaText===null) s.el.removeAttribute('aria-valuetext'); else s.el.setAttribute('aria-valuetext',s.ariaText);
+        });
         if(this.ui&&this.ui.status)this.ui.status.textContent=isTrustedResult(this)?'Replaying solution (replay check skipped)':'Replaying verified solution';
         return;
       }
@@ -1638,6 +1660,14 @@ class Component extends DCLogic {
       // length, so the lane agrees with the proof box and the README.
       var moves = (this.realMoveCount != null) ? this.realMoveCount : (this.lastSolution||[]).length;
       lanesUpdate(this, this.realLanes || [], winnerKey, moves);
+      // Keep the losing lane's final live elapsed counter instead of replacing
+      // it with a per-engine duration that can round down to 0.0s.
+      var frozenLoser = this._nativeLoserLaneStat;
+      if (isNativeWinner(this.realWinner) && frozenLoser){
+        var loserLane = this.root.querySelector('[data-lane="'+frozenLoser.key+'"]');
+        var loserStat = loserLane && loserLane.querySelector('[data-stat]');
+        if (loserStat) loserStat.textContent = frozenLoser.text;
+      }
     };
 
     // The solution panel must show the standard face-turn notation (e.g. "U2",
@@ -2119,7 +2149,32 @@ class Component extends DCLogic {
         }
       }
       self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:!compactNativeTextureResult, trusted:compactNativeTextureResult, moveCount:res.moveCount, winner:res.winner };
+      self._nativeLoserLaneStat = null;
+      if (isNativeWinner(res.winner) && res.lanes && res.lanes.length > 1){
+        var loserKey = res.winner === 'gullicube' ? 'det' : 'beam';
+        var loserLane = self.root.querySelector('[data-lane="'+loserKey+'"]');
+        var loserStat = loserLane && loserLane.querySelector('[data-stat]');
+        if (loserStat){
+          var loserId = res.winner === 'gullicube' ? 'rcube' : 'gullicube';
+          self._nativeLoserLaneStat = {key:loserKey,
+            text:engineName(loserId)+' lost · elapsed '+elapsedLabel(elapsedMs)};
+        }
+      }
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
+      if (isNativeWinner(res.winner)){
+        var winnerKey = KEYS[res.winner] || 'det';
+        var winnerLane = self.root.querySelector('[data-lane="'+winnerKey+'"]');
+        if (winnerLane){
+          var winnerFill = winnerLane.querySelector('[data-fill]'), winnerPct = winnerLane.querySelector('[data-pct2]'),
+              winnerStat = winnerLane.querySelector('[data-stat]'), winnerStar = winnerLane.querySelector('[data-star]');
+          var winnerResult = self.realLanes.find(function(lane){ return lane.id === res.winner; });
+          if (winnerFill) winnerFill.style.width = '100%';
+          if (winnerPct){ winnerPct.textContent = '100%'; winnerPct.style.color = '#1BA64B'; }
+          if (winnerStat) winnerStat.textContent = engineName(res.winner)+' solved · '+res.moveCount+' moves'+
+            (self.realLanes.length > 1 && winnerResult && winnerResult.label ? ' — '+winnerResult.label.replace(/^[^:]*: /,'') : '');
+          if (winnerStar) winnerStar.style.display = 'inline';
+        }
+      }
       self.lastSolution = res.moves;
       // res.moveCount is the face-turn (HTM) count; res.moves is the half-turn-
       // expanded animation list. Keep the HTM count + notation for the lane/proof/
@@ -2233,6 +2288,7 @@ class Component extends DCLogic {
       // fabricate per-frame beam-search node/generation telemetry on its lane —
       // that would contradict the "two-phase" label. Show it as found; finishLanes
       // then stamps the verified move count.
+      if (!this._solvePending && isNativeWinner(this.realWinner)) return;
       if ((this.n||3) === 3){
         var el = this.root.querySelector('[data-lane="det"]');
         if (el){
