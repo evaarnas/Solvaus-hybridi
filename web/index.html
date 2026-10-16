@@ -1343,7 +1343,7 @@ class Component extends DCLogic {
         const p = isWin?100:Math.max(0,Math.min(100,(L.pct|0)));
         if(fill) fill.style.width = p+'%';
         if(pct){ pct.textContent = p+'%'; pct.style.color = (L.solved||isWin)?'#1BA64B':''; }
-        if (stat) stat.textContent = isWin ? (engineName(L.id)+' solved · '+moves+' moves'+((lanes||[]).length>1&&L.label?' — '+L.label.replace(/^[^:]*: /,''):'')) : (L.solved?(L.label||'solved'):(L.label||'searching…'));
+        if (stat) stat.textContent = isWin ? (engineName(L.id)+' solved · '+Number(moves).toLocaleString()+' moves'+((lanes||[]).length>1&&L.label?' — '+L.label.replace(/^[^:]*: /,''):'')) : (L.solved?(L.label||'solved'):(L.label||'searching…'));
         if(star) star.style.display = isWin ? 'inline' : 'none';
       });
     }
@@ -2158,9 +2158,10 @@ class Component extends DCLogic {
           var loserId = res.winner === 'gullicube' ? 'rcube' : 'gullicube';
           var loserResult = res.lanes.find(function(lane){ return lane.id === loserId; });
           var loserText = loserResult && loserResult.solved
-            ? engineName(loserId)+': '+loserResult.moveCount+' moves · lost · elapsed '+elapsedLabel(elapsedMs)
+            ? engineName(loserId)+': '+Number(loserResult.moveCount).toLocaleString()+' moves · lost · elapsed '+elapsedLabel(elapsedMs)
             : engineName(loserId)+': '+((loserResult && loserResult.label) || 'no solution');
           self._nativeLoserLaneStat = {key:loserKey,text:loserText};
+          loserStat.textContent = loserText;
         }
       }
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
@@ -2173,7 +2174,7 @@ class Component extends DCLogic {
           var winnerResult = self.realLanes.find(function(lane){ return lane.id === res.winner; });
           if (winnerFill) winnerFill.style.width = '100%';
           if (winnerPct){ winnerPct.textContent = '100%'; winnerPct.style.color = '#1BA64B'; }
-          if (winnerStat) winnerStat.textContent = engineName(res.winner)+' solved · '+res.moveCount+' moves'+
+          if (winnerStat) winnerStat.textContent = engineName(res.winner)+' solved · '+Number(res.moveCount).toLocaleString()+' moves'+
             (self.realLanes.length > 1 && winnerResult && winnerResult.label ? ' — '+winnerResult.label.replace(/^[^:]*: /,'') : '');
           if (winnerStar) winnerStar.style.display = 'inline';
         }
