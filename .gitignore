@@ -1,7 +1,9 @@
 /target
 /src-tauri/target
 /src-tauri/gullicube-bundle
-/src-tauri/gen/schemas
+/src-tauri/gen
+/src-tauri/.cargo
+/.idea/caches
 *.sqlite3
 .DS_Store
 .serena/
