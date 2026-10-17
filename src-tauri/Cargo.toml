@@ -2,7 +2,7 @@
 name = "cube-solver"
 version = "0.1.0"
 description = "Solvaus-hybridi — N×N cube solver studio"
-authors = ["Adam Nolle"]
+authors = ["Adam Nolle et al"]
 edition = "2021"
 
 [lib]

@@ -5,7 +5,7 @@
   <project_license>GPL-3.0-only</project_license>
   <name>Cube Solver</name>
   <summary>N×N cube solver studio</summary>
-  <developer_name>Adam Nolle</developer_name>
+  <developer_name>Adam Nolle et al</developer_name>
   <description>
     <p>Build random or custom scrambles from 2×2 up to 1001×1001, solve from the visible sticker state with the RCube and Gullicube native engines or the Rust reduction solvers, and watch the moves animate in 3D.</p>
     <p>Solutions are replayed through the cube model up to 21×21; larger native solves rely on the engine's solved-state result and are labelled as unverified.</p>
