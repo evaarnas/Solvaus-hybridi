@@ -321,13 +321,20 @@ class Component extends DCLogic {
     if (this.root) this.root.scrollTo({ top: 0, behavior: 'instant' });
   }
 
+  scrollToSolverLanesOnAndroid() {
+    if (!document.documentElement.classList.contains('android') || !this.root) return;
+    const lane = Array.from(this.root.querySelectorAll('[data-lane]'))
+      .find((el) => el.getClientRects().length > 0);
+    if (lane) lane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   renderVals() {
     return {
       rootRef: (el) => { if (el) this.root = el; },
       onIncN: () => this.setN(this.n + 1),
       onDecN: () => this.setN(this.n - 1),
       onScramble: () => this.scramble(),
-      onSolve: () => { this.scrollToTopOnAndroid(); this.solve(); },
+      onSolve: () => this.solve(),
       onReplay: () => { this.scrollToTopOnAndroid(); this.replay(); },
       onReset: () => this.resetSolved(),
       onScrambleInput: (e) => { this.scrambleDepth = parseInt(e.target.value, 10); this.q('[data-scramble-val]').textContent = this.scrambleDepth; },
@@ -1955,6 +1962,7 @@ class Component extends DCLogic {
       }, watchdogMs);
       if (this.ui && this.ui.status) this.ui.status.textContent = 'Starting solver…';
       if (this.startLanes) this.startLanes();
+      if (this.scrollToSolverLanesOnAndroid) this.scrollToSolverLanesOnAndroid();
       if (this.syncControls) this.syncControls();
       if (hasNativeReduction(this)){
         postNativeSolve(this);
@@ -2211,6 +2219,7 @@ class Component extends DCLogic {
       self.phase = 'solving'; self.busy = true;
       if (self.showSolution) self.showSolution();
       if (self.ui && self.ui.status) self.ui.status.textContent = engineName(res.winner) + ' reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
+      if (self.scrollToTopOnAndroid) self.scrollToTopOnAndroid();
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
     }
