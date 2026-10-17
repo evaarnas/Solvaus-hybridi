@@ -1327,7 +1327,17 @@ class Component extends DCLogic {
     const sd = inst.root.querySelector('[data-scramble]'); if (sd) sd.value = 200;
     const sdv = inst.root.querySelector('[data-scramble-val]'); if (sdv) sdv.textContent = '200';
 
-    function engineName(id){ return id==='gullicube' ? 'Gullicube' : 'RCube'; }
+    function engineName(id){
+      return ({
+        gullicube:'Gullicube',
+        rcube:'RCube',
+        kociemba:'Two-phase (Kociemba)',
+        deterministic:'Meet-in-the-middle',
+        beam:'Beam search',
+        evolution:'Island genetic',
+        reduction:'N×N reduction'
+      })[id] || 'Solver';
+    }
     function isNativeWinner(w){ return w==='rcube'||w==='gullicube'; }
     function lanesUpdate(self, lanes, winnerKey, moves){
       ['det','beam','evo'].forEach(k=>{
