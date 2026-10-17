@@ -52,7 +52,17 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
     const sd = inst.root.querySelector('[data-scramble]'); if (sd) sd.value = 200;
     const sdv = inst.root.querySelector('[data-scramble-val]'); if (sdv) sdv.textContent = '200';
 
-    function engineName(id){ return id==='gullicube' ? 'Gullicube' : 'RCube'; }
+    function engineName(id){
+      return ({
+        gullicube:'Gullicube',
+        rcube:'RCube',
+        kociemba:'Two-phase (Kociemba)',
+        deterministic:'Meet-in-the-middle',
+        beam:'Beam search',
+        evolution:'Island genetic',
+        reduction:'N×N reduction'
+      })[id] || 'Solver';
+    }
     function isNativeWinner(w){ return w==='rcube'||w==='gullicube'; }
     function lanesUpdate(self, lanes, winnerKey, moves){
       ['det','beam','evo'].forEach(k=>{
@@ -670,6 +680,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       }, watchdogMs);
       if (this.ui && this.ui.status) this.ui.status.textContent = 'Starting solver…';
       if (this.startLanes) this.startLanes();
+      if (this.scrollToSolverLanesOnAndroid) this.scrollToSolverLanesOnAndroid();
       if (this.syncControls) this.syncControls();
       if (hasNativeReduction(this)){
         postNativeSolve(this);
@@ -926,6 +937,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self.phase = 'solving'; self.busy = true;
       if (self.showSolution) self.showSolution();
       if (self.ui && self.ui.status) self.ui.status.textContent = engineName(res.winner) + ' reports solved in ' + elapsedLabel(elapsedMs) + ' — replaying solution';
+      if (self.scrollToTopOnAndroid) self.scrollToTopOnAndroid();
       if (self.ui && self.ui.count) self.ui.count.style.display = 'inline-block';
       if (self.syncControls) self.syncControls();
     }
