@@ -261,13 +261,7 @@ fn solve_with_rcube(
             std::sync::Arc::new(move |info| p(info.percent));
         arc_p
     });
-    solve_native(
-        n,
-        colors,
-        control,
-        Solver::Rcube,
-        native_progress,
-    )
+    solve_native(n, colors, control, Solver::Rcube, native_progress)
 }
 
 fn rcube_moves(
