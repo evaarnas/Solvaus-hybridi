@@ -1777,23 +1777,23 @@ class Component extends DCLogic {
       var travel = self.reducedMotion ? 0 : ((Math.floor(elapsed/500)%4) * 80);
       solveLaneKeys(self).forEach(function(laneKey){
       var laneName = (pickedSolver === 'competition') ? (laneKey === 'beam' ? 'Gullicube' : 'RCube') : estimateName;
-      var laneProgress = (self._laneSolveProgress && Number.isFinite(self._laneSolveProgress[laneKey]))
+      var estimatedProgress = (self._laneSolveProgress && Number.isFinite(self._laneSolveProgress[laneKey]))
         ? self._laneSolveProgress[laneKey]
-        : estimatedProgress;
+        : ((self._solveDispatch === 'native' || self._solveDispatch === 'worker') && Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null);
       var lane = self.root.querySelector('[data-lane="'+laneKey+'"]');
       if (lane){
         var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
-        if (laneProgress === null){
+        if (estimatedProgress === null){
           lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
           if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
           if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
         } else {
-          lane.setAttribute('aria-valuenow', String(laneProgress));
-          lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + laneProgress + '%');
-          if (stat) stat.textContent = laneName + ' estimate · ' + laneProgress + '% · elapsed ' + elapsedLabel(elapsed);
-          if (pct){ pct.textContent = laneProgress + '%'; pct.style.color = '#1573E6'; }
-          if (fill){ fill.style.width=laneProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
+          lane.setAttribute('aria-valuenow', String(estimatedProgress));
+          lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + estimatedProgress + '%');
+          if (stat) stat.textContent = laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
+          if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
         }
       }
       });
