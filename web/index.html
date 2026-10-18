@@ -1777,20 +1777,23 @@ class Component extends DCLogic {
       var travel = self.reducedMotion ? 0 : ((Math.floor(elapsed/500)%4) * 80);
       solveLaneKeys(self).forEach(function(laneKey){
       var laneName = (pickedSolver === 'competition') ? (laneKey === 'beam' ? 'Gullicube' : 'RCube') : estimateName;
+      var laneProgress = (self._laneSolveProgress && Number.isFinite(self._laneSolveProgress[laneKey]))
+        ? self._laneSolveProgress[laneKey]
+        : estimatedProgress;
       var lane = self.root.querySelector('[data-lane="'+laneKey+'"]');
       if (lane){
         var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
-        if (estimatedProgress === null){
+        if (laneProgress === null){
           lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
           if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
           if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
         } else {
-          lane.setAttribute('aria-valuenow', String(estimatedProgress));
-          lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + estimatedProgress + '%');
-          if (stat) stat.textContent = laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
-          if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
-          if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
+          lane.setAttribute('aria-valuenow', String(laneProgress));
+          lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + laneProgress + '%');
+          if (stat) stat.textContent = laneName + ' estimate · ' + laneProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          if (pct){ pct.textContent = laneProgress + '%'; pct.style.color = '#1573E6'; }
+          if (fill){ fill.style.width=laneProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
         }
       }
       });
@@ -1817,6 +1820,17 @@ class Component extends DCLogic {
           self._solveRequestToken !== requestToken || !payload ||
           !Number.isFinite(payload.percent)) return;
       self._nativeSolveProgress = Math.max(0, Math.min(100, Math.round(payload.percent)));
+      if (!self._laneSolveProgress) self._laneSolveProgress = {};
+      if (Number.isFinite(payload.rcube)) {
+        self._laneSolveProgress.det = Math.max(0, Math.min(100, Math.round(payload.rcube)));
+      } else {
+        self._laneSolveProgress.det = self._nativeSolveProgress;
+      }
+      if (Number.isFinite(payload.gullicube)) {
+        self._laneSolveProgress.beam = Math.max(0, Math.min(100, Math.round(payload.gullicube)));
+      } else {
+        self._laneSolveProgress.beam = self._nativeSolveProgress;
+      }
       var progressLabel = self.root.querySelector('[data-native-solve-progress]');
       if (progressLabel) progressLabel.textContent = self._nativeSolveProgress + '%';
       if (self.setSolvedPct) self.setSolvedPct(self._nativeSolveProgress / 100);
@@ -1825,6 +1839,7 @@ class Component extends DCLogic {
     function startSolveActivity(self){
       self._solveStartedAt = performance.now();
       self._nativeSolveProgress = null;
+      self._laneSolveProgress = null;
       clearInterval(self._solveHeartbeat);
       refreshSolveActivity(self);
       self._solveHeartbeat = setInterval(function(){ refreshSolveActivity(self); }, 500);

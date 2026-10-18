@@ -108,7 +108,15 @@ impl Solver {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct SolveProgress {
+    pub percent: f64,
+    pub rcube: Option<f64>,
+    pub gullicube: Option<f64>,
+}
+
 type ProgressFn = dyn Fn(f64) + Send + Sync;
+type NativeProgressFn = dyn Fn(SolveProgress) + Send + Sync;
 
 /// One engine's outcome in a (possibly multi-engine) solve.
 struct EngineRun {
@@ -159,7 +167,7 @@ fn solve_native(
     colors: &[u8],
     control: &NativeReductionControl,
     solver: Solver,
-    progress: Option<std::sync::Arc<ProgressFn>>,
+    progress: Option<std::sync::Arc<NativeProgressFn>>,
 ) -> Result<Vec<u8>, String> {
     let max_n = if solver == Solver::Rcube {
         MAX_NATIVE_CUBE_SIZE
@@ -171,8 +179,32 @@ fn solve_native(
     }
 
     let runs = match solver {
-        Solver::Rcube => vec![run_rcube(n, colors, control, progress.as_deref())],
-        Solver::Gullicube => vec![run_gullicube(n, colors, control, progress.as_deref())],
+        Solver::Rcube => {
+            let p = progress.clone();
+            let rcube_progress = move |percent: f64| {
+                if let Some(p) = &p {
+                    p(SolveProgress {
+                        percent,
+                        rcube: Some(percent),
+                        gullicube: None,
+                    });
+                }
+            };
+            vec![run_rcube(n, colors, control, Some(&rcube_progress))]
+        }
+        Solver::Gullicube => {
+            let p = progress.clone();
+            let gullicube_progress = move |percent: f64| {
+                if let Some(p) = &p {
+                    p(SolveProgress {
+                        percent,
+                        rcube: None,
+                        gullicube: Some(percent),
+                    });
+                }
+            };
+            vec![run_gullicube(n, colors, control, Some(&gullicube_progress))]
+        }
         Solver::Competition => {
             // Overall progress is the mean of both engines' progress.
             let lanes = std::sync::Arc::new(Mutex::new([0.0f64; 2]));
@@ -182,8 +214,15 @@ fn solve_native(
                 move |percent: f64| {
                     let mut lanes = lanes.lock().unwrap_or_else(|e| e.into_inner());
                     lanes[lane] = percent;
+                    let rcube = lanes[0];
+                    let gullicube = lanes[1];
+                    let overall = (rcube + gullicube) / 2.0;
                     if let Some(progress) = &progress {
-                        progress((lanes[0] + lanes[1]) / 2.0);
+                        progress(SolveProgress {
+                            percent: overall,
+                            rcube: Some(rcube),
+                            gullicube: Some(gullicube),
+                        });
                     }
                 }
             };
@@ -217,12 +256,17 @@ fn solve_with_rcube(
     control: &NativeReductionControl,
     progress: Option<Box<ProgressFn>>,
 ) -> Result<Vec<u8>, String> {
+    let native_progress = progress.map(|p| {
+        let arc_p: std::sync::Arc<NativeProgressFn> =
+            std::sync::Arc::new(move |info| p(info.percent));
+        arc_p
+    });
     solve_native(
         n,
         colors,
         control,
         Solver::Rcube,
-        progress.map(std::sync::Arc::from),
+        native_progress,
     )
 }
 
@@ -601,8 +645,15 @@ async fn solve_stickers(
             &colors,
             &worker_control,
             solver,
-            Some(std::sync::Arc::new(move |percent| {
-                if let Err(error) = on_progress.send(serde_json::json!({ "percent": percent })) {
+            Some(std::sync::Arc::new(move |progress_info| {
+                let mut payload = serde_json::json!({ "percent": progress_info.percent });
+                if let Some(r) = progress_info.rcube {
+                    payload["rcube"] = serde_json::json!(r);
+                }
+                if let Some(g) = progress_info.gullicube {
+                    payload["gullicube"] = serde_json::json!(g);
+                }
+                if let Err(error) = on_progress.send(payload) {
                     eprintln!("failed to send solve progress: {error}");
                 }
             })),
