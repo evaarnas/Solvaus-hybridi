@@ -18,8 +18,14 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 
   ```sh
   cargo tauri android init
-  cargo tauri android build --debug --apk
+  mkdir -p gen/android/app/src/main/java/com/gmail/solvaushybridi/generated
+  cargo tauri android build --debug --apk --config tauri.android-build.conf.json
   ```
+
+  Keep `tauri.conf.json`'s `com.gmail.solvaus_hybridi` identifier and the generated Gradle
+  `applicationId` unchanged for Play Store updates. Tauri currently rejects underscores in its
+  generic identifier validation, so the Android build passes `tauri.android-build.conf.json`
+  as a build-only workaround. The generated Gradle project retains the Play Store application ID.
 
 - **Release signing:** for Play Store or a release APK, create a keystore and follow
   <https://v2.tauri.app/distribute/sign/android/>.
