@@ -72,6 +72,12 @@ fn build_rcube() {
     let mut build = cc::Build::new();
     build
         .cpp(true)
+        // Android does not guarantee that libc++_shared.so is present in the
+        // installed package. Statically link the NDK C++ runtime so the Rust
+        // cdylib can load on Play Store builds as well as CI debug APKs.
+        .cpp_link_stdlib_static(
+            std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "android"),
+        )
         .std("c++17")
         .include("rcube")
         .file("rcube/Cube.cpp")
