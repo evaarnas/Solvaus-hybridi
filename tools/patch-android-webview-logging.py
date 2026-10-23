@@ -6,17 +6,28 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CLIENT = (
+JAVA_ROOT = (
     ROOT / "src-tauri" / "gen" / "android" / "app" / "src" / "main" / "java"
-    / "com" / "gmail" / "solvaus" / "hybridi" / "generated" / "RustWebViewClient.kt"
 )
-CHROME_CLIENT = CLIENT.with_name("RustWebChromeClient.kt")
+
+
+def locate_generated_client(filename: str) -> Path:
+    """Find Tauri's generated Kotlin file without assuming package subfolders."""
+    if not JAVA_ROOT.is_dir():
+        raise SystemExit(f"Tauri Android Java source directory not found: {JAVA_ROOT}")
+    matches = list(JAVA_ROOT.rglob(filename))
+    if len(matches) != 1:
+        found = ", ".join(str(path) for path in matches) or "none"
+        raise SystemExit(
+            f"Expected exactly one generated {filename} under {JAVA_ROOT}; "
+            f"found {len(matches)} ({found})."
+        )
+    return matches[0]
 
 
 def patch_webview_client() -> None:
-    if not CLIENT.is_file():
-        raise SystemExit(f"Tauri Android WebView client not found: {CLIENT}")
-    source = CLIENT.read_text(encoding="utf-8")
+    client = locate_generated_client("RustWebViewClient.kt")
+    source = client.read_text(encoding="utf-8")
     if 'Log.e("SolvausWebView", "Request failed:' in source and "Rust handler returned" in source:
         return
 
@@ -94,13 +105,12 @@ def patch_webview_client() -> None:
             '        super.onReceivedHttpError(view, request, errorResponse)\n'
             '    }\n' + ending, 1,
         )
-    CLIENT.write_text(source, encoding="utf-8", newline="\n")
+    client.write_text(source, encoding="utf-8", newline="\n")
 
 
 def patch_chrome_client() -> None:
-    if not CHROME_CLIENT.is_file():
-        raise SystemExit(f"Tauri Android WebChrome client not found: {CHROME_CLIENT}")
-    source = CHROME_CLIENT.read_text(encoding="utf-8")
+    chrome_client = locate_generated_client("RustWebChromeClient.kt")
+    source = chrome_client.read_text(encoding="utf-8")
     if 'Log.e("SolvausWebConsole", msg)' in source:
         return
     import_marker = "import android.webkit.*\n"
@@ -115,13 +125,13 @@ def patch_chrome_client() -> None:
         '        Log.e("SolvausWebConsole", msg)\n'
         '        Logger.error(tag, msg, null)', 1,
     )
-    CHROME_CLIENT.write_text(source, encoding="utf-8", newline="\n")
+    chrome_client.write_text(source, encoding="utf-8", newline="\n")
 
 
 def main() -> int:
     patch_webview_client()
     patch_chrome_client()
-    print(f"WebView request and console diagnostics are present under {CLIENT.parent}")
+    print(f"WebView request and console diagnostics are present under {JAVA_ROOT}")
     return 0
 
 
