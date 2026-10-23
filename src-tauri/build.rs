@@ -279,6 +279,10 @@ fn build_gullicube() {
     for source in sources {
         command.arg(root.join(source));
     }
+    if android {
+        // Bionic rejects ARM64 executables whose PT_TLS alignment is below 64.
+        command.arg(root.join("src/full/android_tls.cpp"));
+    }
     let built = out_dir.join(exe_name);
     command.arg("-o").arg(&built);
     if cfg!(windows) {
