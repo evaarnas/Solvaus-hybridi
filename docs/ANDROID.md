@@ -18,9 +18,11 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 
   ```sh
   cargo tauri android init
-  python ../tools/patch-android-webview-logging.py
   cargo tauri android build --debug --features custom-protocol --apk
   ```
+
+  To instrument release or debug WebView logging, run that build once first so Tauri generates
+  its Kotlin sources; then run `python ../tools/patch-android-webview-logging.py` and rebuild.
 
 - **Play Store build:** build a release app bundle with the custom protocol enabled:
 

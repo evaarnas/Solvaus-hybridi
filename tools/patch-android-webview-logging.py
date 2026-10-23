@@ -6,20 +6,20 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-JAVA_ROOT = (
-    ROOT / "src-tauri" / "gen" / "android" / "app" / "src" / "main" / "java"
+SOURCE_ROOT = (
+    ROOT / "src-tauri" / "gen" / "android" / "app" / "src" / "main"
 )
 
 
 def locate_generated_client(filename: str) -> Path:
     """Find Tauri's generated Kotlin file without assuming package subfolders."""
-    if not JAVA_ROOT.is_dir():
-        raise SystemExit(f"Tauri Android Java source directory not found: {JAVA_ROOT}")
-    matches = list(JAVA_ROOT.rglob(filename))
+    if not SOURCE_ROOT.is_dir():
+        raise SystemExit(f"Tauri Android source directory not found: {SOURCE_ROOT}")
+    matches = list(SOURCE_ROOT.rglob(filename))
     if len(matches) != 1:
         found = ", ".join(str(path) for path in matches) or "none"
         raise SystemExit(
-            f"Expected exactly one generated {filename} under {JAVA_ROOT}; "
+            f"Expected exactly one generated {filename} under {SOURCE_ROOT}; "
             f"found {len(matches)} ({found})."
         )
     return matches[0]
@@ -131,7 +131,7 @@ def patch_chrome_client() -> None:
 def main() -> int:
     patch_webview_client()
     patch_chrome_client()
-    print(f"WebView request and console diagnostics are present under {JAVA_ROOT}")
+    print(f"WebView request and console diagnostics are present under {SOURCE_ROOT}")
     return 0
 
 
