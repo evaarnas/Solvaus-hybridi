@@ -160,7 +160,10 @@ fn stage_android_cpp_runtime() {
         .join(target_triple)
         .join("libc++_shared.so");
     if !runtime.is_file() {
-        panic!("Android NDK C++ runtime was not found at {}", runtime.display());
+        panic!(
+            "Android NDK C++ runtime was not found at {}",
+            runtime.display()
+        );
     }
 
     let destination = Path::new("gen/android/app/src/main/jniLibs")
