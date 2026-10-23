@@ -18,6 +18,7 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 
   ```sh
   cargo tauri android init
+  python ../tools/configure-android.py
   cargo tauri android build --debug --features custom-protocol --apk
   ```
 

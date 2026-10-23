@@ -171,13 +171,16 @@ fn stage_android_cpp_runtime() {
         .join("libc++_shared.so");
     std::fs::create_dir_all(destination.parent().expect("runtime destination parent"))
         .expect("create Android jniLibs directory");
-    std::fs::copy(&runtime, &destination).unwrap_or_else(|error| {
-        panic!(
-            "could not stage Android C++ runtime from {} to {}: {error}",
-            runtime.display(),
-            destination.display()
-        )
-    });
+    let _ = std::fs::remove_file(&destination);
+    if let Err(error) = std::fs::copy(&runtime, &destination) {
+        if !destination.is_file() {
+            panic!(
+                "could not stage Android C++ runtime from {} to {}: {error}",
+                runtime.display(),
+                destination.display()
+            );
+        }
+    }
 }
 
 /// Gullicube runs as a child process (it is a self-contained program with its own

@@ -72,6 +72,7 @@ jobs:
         working-directory: src-tauri
         run: |
           cargo tauri android init --ci
+          python ../tools/configure-android.py
           # Gullicube ships as a libgullicube.so executable; it must be extracted to disk to run.
           sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
           grep -n -A1 '^android {' gen/android/app/build.gradle.kts
