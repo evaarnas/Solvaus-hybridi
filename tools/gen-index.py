@@ -1383,6 +1383,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         [['rcube','RCube'],['gullicube','Gullicube'],['competition','Competition (both, shortest wins)']].forEach(function(o){
           var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op);
         });
+        sel.value = 'competition';
         wrap.appendChild(sel); sel._wrap = wrap;
         sel.addEventListener('change', function(){ if (self.resetLanes && !self.busy && !self._solvePending) self.resetLanes(); applyEngineLabels(self); });
         solveBtn.parentNode.insertBefore(wrap, solveBtn);
