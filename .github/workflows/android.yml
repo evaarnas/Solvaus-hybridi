@@ -72,13 +72,14 @@ jobs:
         working-directory: src-tauri
         run: |
           cargo tauri android init --ci
+          python ../tools/patch-android-webview-logging.py
           # Gullicube ships as a libgullicube.so executable; it must be extracted to disk to run.
           sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
           grep -n -A1 '^android {' gen/android/app/build.gradle.kts
 
       - name: Build the APK
         working-directory: src-tauri
-        run: cargo tauri android build --debug --apk --target aarch64 --target armv7
+        run: cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
 
       - uses: actions/upload-artifact@v4
         with:

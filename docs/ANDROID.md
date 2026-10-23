@@ -18,8 +18,24 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 
   ```sh
   cargo tauri android init
-  cargo tauri android build --debug --apk
+  python ../tools/patch-android-webview-logging.py
+  cargo tauri android build --debug --features custom-protocol --apk
   ```
+
+- **Play Store build:** build a release app bundle with the custom protocol enabled:
+
+  ```sh
+  cargo tauri android build --features custom-protocol --aab --target aarch64 --target armv7
+  ```
+
+  The Tauri build hook generates the WASM package automatically. To verify or build it
+  explicitly first, run `python ../tools/build-wasm.py` from `src-tauri/`; the native build now
+  fails early if `web/pkg/cube_wasm.js` or `web/pkg/cube_wasm_bg.wasm` is missing.
+
+- **WebView diagnostics:** the patch above adds `SolvausWebView` request and HTTP errors, plus
+  `SolvausWebConsole` JavaScript errors (including module import and WebGL startup failures) in
+  release builds. Rebuild and install that APK, reproduce the blank cube, then capture the matching
+  lines with `adb logcat -s SolvausWebView:V SolvausWebConsole:E`.
 
 - **Release signing:** for Play Store or a release APK, create a keystore and follow
   <https://v2.tauri.app/distribute/sign/android/>.

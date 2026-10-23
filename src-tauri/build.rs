@@ -39,6 +39,20 @@ fn assert_frontend_is_fresh() {
         html.len()
     );
 
+    // The page imports the generated wasm-bindgen glue as a JavaScript module.
+    // If either ignored build output is missing, Tauri can still serve the page
+    // shell while the missing module URL falls back to HTML, leaving the cube
+    // and all controls inert in the installed app.
+    for asset in ["pkg/cube_wasm.js", "pkg/cube_wasm_bg.wasm"] {
+        let path = web.join(asset);
+        assert!(
+            path.is_file() && std::fs::metadata(&path).is_ok_and(|metadata| metadata.len() > 0),
+            "Cube Solver build aborted: required frontend asset {} is missing or empty. Run `python3 tools/build-wasm.py` before building the Tauri app.",
+            path.display()
+        );
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+
     let worker = web.join("solver-worker.js");
     let worker_src = std::fs::read_to_string(&worker).unwrap_or_else(|e| {
         panic!("Cube Solver build aborted: cannot read web/solver-worker.js ({e}).")
@@ -72,12 +86,6 @@ fn build_rcube() {
     let mut build = cc::Build::new();
     build
         .cpp(true)
-        // Android does not guarantee that libc++_shared.so is present in the
-        // installed package. Statically link the NDK C++ runtime so the Rust
-        // cdylib can load on Play Store builds as well as CI debug APKs.
-        .cpp_link_stdlib_static(
-            std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "android"),
-        )
         .std("c++17")
         .include("rcube")
         .file("rcube/Cube.cpp")
@@ -85,8 +93,9 @@ fn build_rcube() {
         .file("rcube/Face.cpp")
         .file("rcube/TinyPngOut.cpp")
         .file("rcube/bridge.cpp")
-        .warnings(false)
-        .compile("rcube_engine");
+        .warnings(false);
+
+    build.compile("rcube_engine");
 
     for source in [
         "rcube/Cube.cpp",
@@ -101,6 +110,71 @@ fn build_rcube() {
     ] {
         println!("cargo:rerun-if-changed={source}");
     }
+}
+
+/// Package the NDK C++ runtime alongside the Android libraries. Some native
+/// objects in the final Rust cdylib may retain a DT_NEEDED reference to this
+/// shared runtime, and Play Store installs only load dependencies included in
+/// the APK/AAB's ABI split.
+fn stage_android_cpp_runtime() {
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+    let (abi, target_triple) = match arch.as_str() {
+        "aarch64" => ("arm64-v8a", "aarch64-linux-android"),
+        "arm" => ("armeabi-v7a", "arm-linux-androideabi"),
+        "x86_64" => ("x86_64", "x86_64-linux-android"),
+        "x86" => ("x86", "i686-linux-android"),
+        _ => return,
+    };
+
+    for key in ["ANDROID_NDK_HOME", "NDK_HOME", "ANDROID_NDK_ROOT"] {
+        println!("cargo:rerun-if-env-changed={key}");
+    }
+    println!("cargo:rerun-if-env-changed=ANDROID_HOME");
+
+    let ndk_root = ["ANDROID_NDK_HOME", "NDK_HOME", "ANDROID_NDK_ROOT"]
+        .into_iter()
+        .find_map(|key| std::env::var_os(key).map(std::path::PathBuf::from))
+        .or_else(|| {
+            let sdk = std::env::var_os("ANDROID_HOME")?;
+            let ndk_dir = Path::new(&sdk).join("ndk");
+            std::fs::read_dir(ndk_dir)
+                .ok()?
+                .flatten()
+                .filter(|entry| entry.path().is_dir())
+                .map(|entry| entry.path())
+                .max()
+        })
+        .expect("Android build requires ANDROID_NDK_HOME or NDK_HOME to stage libc++_shared.so");
+
+    let host_tag = if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else if cfg!(target_os = "macos") {
+        "darwin-x86_64"
+    } else {
+        "linux-x86_64"
+    };
+    let runtime = ndk_root
+        .join("toolchains/llvm/prebuilt")
+        .join(host_tag)
+        .join("sysroot/usr/lib")
+        .join(target_triple)
+        .join("libc++_shared.so");
+    if !runtime.is_file() {
+        panic!("Android NDK C++ runtime was not found at {}", runtime.display());
+    }
+
+    let destination = Path::new("gen/android/app/src/main/jniLibs")
+        .join(abi)
+        .join("libc++_shared.so");
+    std::fs::create_dir_all(destination.parent().expect("runtime destination parent"))
+        .expect("create Android jniLibs directory");
+    std::fs::copy(&runtime, &destination).unwrap_or_else(|error| {
+        panic!(
+            "could not stage Android C++ runtime from {} to {}: {error}",
+            runtime.display(),
+            destination.display()
+        )
+    });
 }
 
 /// Gullicube runs as a child process (it is a self-contained program with its own
@@ -287,6 +361,9 @@ fn main() {
     assert_frontend_is_fresh();
     assert_packaged_style_policy();
     build_rcube();
+    if std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "android") {
+        stage_android_cpp_runtime();
+    }
     // The bundle resource directory must exist even when Gullicube cannot be built.
     let _ = std::fs::create_dir_all(BUNDLE_STAGE);
     let _ = std::fs::write(
