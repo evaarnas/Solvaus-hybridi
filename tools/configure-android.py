@@ -10,9 +10,86 @@ ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "src-tauri" / "gen" / "android"
 MANIFEST = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
 PROPERTIES = ANDROID / "app" / "tauri.properties"
+BUILD_TASK = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "BuildTask.kt"
 CONFIG = ROOT / "src-tauri" / "tauri.conf.json"
 ACTIVITY = '            android:name=".MainActivity"'
 ORIENTATION = '            android:screenOrientation="portrait"'
+BUILD_TASK_PACKAGE = "package com.gmail.solvaus.hybridi.kotlin"
+
+
+def fix_build_task_package() -> None:
+    if not BUILD_TASK.is_file():
+        raise SystemExit(f"Generated Android Rust build task not found: {BUILD_TASK}")
+
+    source = BUILD_TASK.read_text(encoding="utf-8")
+    if not source.startswith(BUILD_TASK_PACKAGE + "\n") and not source.startswith(BUILD_TASK_PACKAGE + "\r\n"):
+        if source.startswith("package "):
+            raise SystemExit(f"Unexpected package declaration in {BUILD_TASK}")
+        if "class BuildTask : DefaultTask()" not in source:
+            raise SystemExit(f"Unrecognized generated Rust build task: {BUILD_TASK}")
+        source = BUILD_TASK_PACKAGE + "\n\n" + source
+
+    default_cargo = '        val executable = """cargo""";'
+    cargo_resolver = '''        val cargoHome = System.getenv("CARGO_HOME")
+            ?: File(System.getProperty("user.home"), ".cargo").absolutePath
+        val cargoBin = File(cargoHome, "bin")
+        val executable = listOf("cargo.exe", "cargo.cmd", "cargo.bat", "cargo")
+            .map { File(cargoBin, it) }
+            .firstOrNull { it.isFile }
+            ?.absolutePath
+            ?: "cargo"'''
+    if default_cargo in source:
+        source = source.replace(default_cargo, cargo_resolver, 1)
+    elif 'val cargoHome = System.getenv("CARGO_HOME")' not in source:
+        raise SystemExit(f"Unrecognized Cargo executable setup in {BUILD_TASK}")
+
+    if "import java.util.Properties" not in source:
+        source = source.replace("import java.io.File\n", "import java.io.File\nimport java.util.Properties\n", 1)
+
+    ndk_environment = '''        val androidSdk = System.getenv("ANDROID_HOME")
+            ?: System.getenv("ANDROID_SDK_ROOT")
+            ?: Properties().let { properties ->
+                val localProperties = File(project.rootDir, "local.properties")
+                if (localProperties.isFile) {
+                    localProperties.inputStream().use { properties.load(it) }
+                }
+                properties.getProperty("sdk.dir")
+            }
+        val androidNdk = sequenceOf(
+            System.getenv("ANDROID_NDK_HOME"),
+            System.getenv("NDK_HOME"),
+            System.getenv("ANDROID_NDK_ROOT")
+        ).firstOrNull { !it.isNullOrBlank() } ?: androidSdk?.let { sdk ->
+            File(sdk, "ndk").listFiles()
+                ?.filter { it.isDirectory }
+                ?.maxByOrNull { it.name }
+                ?.absolutePath
+        }
+        val androidNdkBin = androidNdk?.let {
+            File(it, "toolchains/llvm/prebuilt/windows-x86_64/bin")
+        }
+        project.exec {
+            if (!androidSdk.isNullOrBlank()) environment("ANDROID_HOME", androidSdk)
+            if (!androidNdk.isNullOrBlank()) {
+                environment("ANDROID_NDK_HOME", androidNdk)
+                environment("NDK_HOME", androidNdk)
+            }
+            if (androidNdkBin?.isDirectory == true) {
+                environment(
+                    "PATH",
+                    androidNdkBin.absolutePath + File.pathSeparator + System.getenv("PATH").orEmpty()
+                )
+            }
+            workingDir(File(project.projectDir, rootDirRel))'''
+    default_exec = '''        project.exec {
+            workingDir(File(project.projectDir, rootDirRel))'''
+    if 'val androidNdkBin = androidNdk?.let {' not in source:
+        if default_exec not in source:
+            raise SystemExit(f"Unrecognized Rust build process setup in {BUILD_TASK}")
+        source = source.replace(default_exec, ndk_environment, 1)
+
+    BUILD_TASK.write_text(source, encoding="utf-8", newline="\n")
+    print("Configured generated Rust build task package, Cargo, and Android NDK environment")
 
 
 def sync_version() -> None:
@@ -44,6 +121,7 @@ def main() -> int:
     if not MANIFEST.is_file():
         raise SystemExit(f"Generated Android manifest not found: {MANIFEST}")
 
+    fix_build_task_package()
     sync_version()
     source = MANIFEST.read_text(encoding="utf-8")
     if ORIENTATION in source:

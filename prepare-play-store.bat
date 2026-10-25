@@ -52,7 +52,18 @@ if errorlevel 1 goto :fail
 
 echo.
 echo Android Studio project is ready at src-tauri\gen\android. No AAB was built.
-exit /b 0
+echo Starting the Tauri CLI bridge and opening Android Studio.
+echo Keep this window open while building the AAB in Android Studio.
+echo.
+pushd "src-tauri"
+cargo tauri android dev --open
+set "TAURI_EXIT=%ERRORLEVEL%"
+popd
+if not "%TAURI_EXIT%"=="0" (
+    echo.
+    echo The Tauri CLI exited with code %TAURI_EXIT%.
+)
+exit /b %TAURI_EXIT%
 
 :fail
 echo.

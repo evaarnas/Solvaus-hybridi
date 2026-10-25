@@ -27,6 +27,12 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
 
 - **Play Store build:** build a release app bundle with the custom protocol enabled:
 
+  Run `prepare-play-store.bat` from the repository root. After preparing the frontend and
+  generating `gen/android`, it starts `cargo tauri android dev --open`; keep that terminal window
+  running while Android Studio builds. The generated Gradle Rust tasks call back to the Tauri CLI
+  for build options, so opening `gen/android` directly does not start that options server. The
+  script does not build an AAB.
+
   ```sh
   cargo tauri android build --features custom-protocol --aab --target aarch64 --target armv7
   ```

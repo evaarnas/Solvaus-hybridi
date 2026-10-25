@@ -1,0 +1,35 @@
+       Debug [tauri_cli::helpers::app_paths] Found Tauri project inside D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri on early lookup
+       Debug [tauri_cli::helpers::app_paths] resolving frontend directory from D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri
+       Debug [ignore::gitignore] opened gitignore file: C:\Users\eerov\AppData\Local\Temp\.gitignore
+       Debug [globset] built glob set; 0 literals, 3 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+       Debug [ignore::gitignore] opened gitignore file: \\?\D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\.gitignore
+       Debug [globset] glob converted to regex: Glob { glob: "**/* 2.*", re: "(?-u)^(?:/?|.*/)[^/]* 2\\.[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, ZeroOrMore, Literal(' '), Literal('2'), Literal('.'), ZeroOrMore]) }
+       Debug [globset] glob converted to regex: Glob { glob: "**/* 3.*", re: "(?-u)^(?:/?|.*/)[^/]* 3\\.[^/]*$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([RecursivePrefix, ZeroOrMore, Literal(' '), Literal('3'), Literal('.'), ZeroOrMore]) }
+       Debug [globset] built glob set; 7 literals, 5 basenames, 2 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 2 regexes
+       Debug [ignore::gitignore] opened gitignore file: \\?\D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\.git\info\exclude
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\.cargo: Ignore(IgnoreMatch(Hidden))
+       Debug [ignore::gitignore] opened gitignore file: D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.gitignore
+       Debug [globset] built glob set; 10 literals, 8 basenames, 1 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\tauri.settings.gradle: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("D:\\Documents\\Rubik\\nxnxn_solver\\Solvaus-hybridi\\src-tauri\\gen\\android\\.gitignore"), original: "/tauri.settings.gradle", actual: "tauri.settings.gradle", is_whitelist: false, is_only_dir: false })))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\local.properties: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("D:\\Documents\\Rubik\\nxnxn_solver\\Solvaus-hybridi\\src-tauri\\gen\\android\\.gitignore"), original: "local.properties", actual: "**/local.properties", is_whitelist: false, is_only_dir: false })))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.editorconfig: Ignore(IgnoreMatch(Hidden))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.gitignore: Ignore(IgnoreMatch(Hidden))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.gradle: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("D:\\Documents\\Rubik\\nxnxn_solver\\Solvaus-hybridi\\src-tauri\\gen\\android\\.gitignore"), original: ".gradle", actual: "**/.gradle", is_whitelist: false, is_only_dir: false })))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.idea: Ignore(IgnoreMatch(Hidden))
+       Debug [ignore::gitignore] opened gitignore file: D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\.idea\.gitignore
+       Debug [globset] built glob set; 2 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 0 required extensions, 0 regexes
+       Debug [ignore::gitignore] opened gitignore file: D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\app\.gitignore
+       Debug [globset] glob converted to regex: Glob { glob: "src/main/**/generated", re: "(?-u)^src/main(?:/|/.*/)generated$", opts: GlobOptions { case_insensitive: false, literal_separator: true, backslash_escape: true, empty_alternates: false }, tokens: Tokens([Literal('s'), Literal('r'), Literal('c'), Literal('/'), Literal('m'), Literal('a'), Literal('i'), Literal('n'), RecursiveZeroOrMore, Literal('g'), Literal('e'), Literal('n'), Literal('e'), Literal('r'), Literal('a'), Literal('t'), Literal('e'), Literal('d')]) }
+       Debug [globset] built glob set; 4 literals, 0 basenames, 0 extensions, 0 prefixes, 0 suffixes, 1 required extensions, 1 regexes
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\gen\android\build: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("D:\\Documents\\Rubik\\nxnxn_solver\\Solvaus-hybridi\\src-tauri\\gen\\android\\.gitignore"), original: "build", actual: "**/build", is_whitelist: false, is_only_dir: false })))
+       Debug [ignore::walk] ignoring D:\Documents\Rubik\nxnxn_solver\Solvaus-hybridi\src-tauri\target: Ignore(IgnoreMatch(Gitignore(Glob { from: Some("C:\\Users\\eerov\\AppData\\Local\\Temp\\.gitignore"), original: "target/", actual: "**/target", is_whitelist: false, is_only_dir: true })))
+       Debug [jsonrpsee-client] Connecting to target: Target { host: "127.0.0.1", host_header: "127.0.0.1:53137", _mode: Plain, path_and_query: "/", basic_auth: None }
+       Debug [jsonrpsee-client] Failed to connect to sockaddr: 127.0.0.1:53137
+       Debug [jsonrpsee-client] Connecting to target: Target { host: "127.0.0.1", host_header: "127.0.0.1:53137", _mode: Plain, path_and_query: "/", basic_auth: None }
+       Debug [jsonrpsee-client] Connecting to target: Target { host: "127.0.0.1", host_header: "127.0.0.1:53137", _mode: Plain, path_and_query: "/", basic_auth: None }
+       Debug [jsonrpsee-client] Connecting to target: Target { host: "127.0.0.1", host_header: "127.0.0.1:53137", _mode: Plain, path_and_query: "/", basic_auth: None }
+       Debug [jsonrpsee-client] Connecting to target: Target { host: "127.0.0.1", host_header: "127.0.0.1:53137", _mode: Plain, path_and_query: "/", basic_auth: None }
+
+thread 'main' (42540) panicked at C:\Users\eerov\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\tauri-cli-2.11.4\src\mobile\mod.rs:403:6:
+failed to read CLI options: Context("failed to build WebSocket client", Io(Os { code: 10061, kind: ConnectionRefused, message: "No connection could be made because the target machine actively refused it." }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
