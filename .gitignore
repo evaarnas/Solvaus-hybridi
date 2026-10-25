@@ -2,6 +2,8 @@
 /src-tauri/target
 /src-tauri/gullicube-bundle
 /src-tauri/gen
+# Android launcher PNGs are regenerated from store-assets/play-store-icon.png.
+/src-tauri/icons/android/mipmap-*/*.png
 /src-tauri/.cargo
 /.idea/caches
 *.sqlite3

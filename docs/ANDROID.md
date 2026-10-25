@@ -19,8 +19,13 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
   ```sh
   cargo tauri android init
   python ../tools/configure-android.py
+  cargo tauri icon ../store-assets/play-store-icon.png --output ../target/tauri-icon-output
   cargo tauri android build --debug --features custom-protocol --apk
   ```
+
+  The Android launcher icon PNGs are generated from `store-assets/play-store-icon.png` during setup
+  and are not tracked individually. The output directory keeps desktop and iOS icon files out of
+  `src-tauri/icons` while Tauri updates the generated Android project's resources.
 
   To instrument release or debug WebView logging, run that build once first so Tauri generates
   its Kotlin sources; then run `python ../tools/patch-android-webview-logging.py` and rebuild.
