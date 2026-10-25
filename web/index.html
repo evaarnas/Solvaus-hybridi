@@ -562,8 +562,8 @@ class Component extends DCLogic {
     const step = total / N;
     const cubie = step * 0.95;
     this.step = step; this.half = (N - 1) / 2;
-    // solid dark core so the gaps never reveal the far side
-    const core = new T.Mesh(new T.BoxGeometry(total * 0.9, total * 0.9, total * 0.9), this.bodyMat);
+    // A rounded core sits behind the outer shell without square corners showing through.
+    const core = new T.Mesh(new T.SphereGeometry(total * 0.475, 32, 24), this.bodyMat);
     core.castShadow = false; core.receiveShadow = false;
     this.cubeGroup.add(core); this.core = core;
     const bodyGeo = new T.BoxGeometry(cubie, cubie, cubie);
