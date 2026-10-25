@@ -46,9 +46,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          # Keep the generated Android Gradle project on the known-good 8.14.5
-          # wrapper. Newer Tauri CLI templates currently generate Gradle 9.6.1,
-          # which has intermittently lost the generated buildSrc plugin jar in CI.
+          # Pin the CLI so Android project generation stays reproducible.
           tool: wasm-pack,tauri-cli@2.11.4
 
       - name: Verify generated frontend
@@ -79,6 +77,10 @@ jobs:
           # Gullicube ships as a libgullicube.so executable; it must be extracted to disk to run.
           sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
           grep -n -A1 '^android {' gen/android/app/build.gradle.kts
+
+      - name: Precompile Tauri's generated Rust Gradle plugin
+        working-directory: src-tauri/gen/android
+        run: ./gradlew --project-dir buildSrc --no-configuration-cache build
 
       - name: Build the APK
         working-directory: src-tauri
