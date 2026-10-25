@@ -6,3 +6,4 @@ src-tauri/gullicube/data/** linguist-detectable=false
 src-tauri/gullicube/data/** -diff
 *.cls linguist-vendored
 *.cls linguist-detectable=false
+*.cls -text

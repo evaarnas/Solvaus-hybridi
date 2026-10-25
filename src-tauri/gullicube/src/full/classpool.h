@@ -17,6 +17,7 @@
 #include "../pair/pool.h"
 #include "wingbeam.h"
 #include <array>
+#include <cctype>
 #include <functional>
 #include <string>
 #include <vector>
@@ -219,7 +220,9 @@ struct ClassPool {
       int c = (int)strtol(buf, &p, 10);
       if (p == buf) continue;
       std::string t(p);
-      while (!t.empty() && (t.back() == '\n' || t.back() == ' ')) t.pop_back();
+      // Git may check these tables out with CRLF on Windows. Strip every
+      // trailing whitespace byte so the D0/D1 metadata is recognized there too.
+      while (!t.empty() && std::isspace(static_cast<unsigned char>(t.back()))) t.pop_back();
       uint8_t df = 1;
       if (t.size() >= 3 && t.compare(t.size() - 3, 2, " D") == 0 && (t.back() == '0' || t.back() == '1')) {
         df = t.back() - '0';
