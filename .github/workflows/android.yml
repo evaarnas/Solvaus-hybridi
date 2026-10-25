@@ -46,7 +46,10 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: wasm-pack,tauri-cli
+          # Keep the generated Android Gradle project on the known-good 8.14.5
+          # wrapper. Newer Tauri CLI templates currently generate Gradle 9.6.1,
+          # which has intermittently lost the generated buildSrc plugin jar in CI.
+          tool: wasm-pack,tauri-cli@2.11.4
 
       - name: Verify generated frontend
         run: python tools/gen-index.py --check
@@ -85,8 +88,9 @@ jobs:
           if ! cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7; then
             # Gradle can occasionally cache an incomplete transformed buildSrc.jar;
             # the next invocation then can't load Tauri's generated RustPlugin.
-            # Drop only Gradle 9.6.1's transformed artifacts and retry once.
-            rm -rf "$HOME/.gradle/caches/9.6.1/transforms"
+            # Drop transformed artifacts and the generated project's config cache,
+            # then retry once with a clean buildSrc plugin transform.
+            rm -rf "$HOME"/.gradle/caches/*/transforms gen/android/.gradle/configuration-cache
             cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
           fi
 
