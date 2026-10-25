@@ -126,13 +126,15 @@ def fix_build_task_package() -> None:
 
     BUILD_TASK.write_text(source, encoding="utf-8", newline="\n")
 
-    # Some Tauri CLI templates omit the package declaration on BuildTask.kt,
-    # while RustPlugin.kt references BuildTask as if both files shared a
-    # package. Add an explicit import so this remains valid if the generated
-    # plugin's package declaration changes between CLI versions.
+    # Some Tauri CLI templates omit package declarations from generated Kotlin
+    # files. Put RustPlugin.kt in BuildTask's package and import the task
+    # explicitly so the files compile consistently across CLI versions.
     if not RUST_PLUGIN.is_file():
         raise SystemExit(f"Generated Rust plugin not found: {RUST_PLUGIN}")
     plugin = RUST_PLUGIN.read_text(encoding="utf-8")
+    if not re.search(r"(?m)^package\s+[^\r\n]+\s*$", plugin):
+        plugin = BUILD_TASK_PACKAGE + "\n\n" + plugin
+        RUST_PLUGIN.write_text(plugin, encoding="utf-8", newline="\n")
     build_task_import = f"import {BUILD_TASK_PACKAGE.removeprefix('package ')}.BuildTask"
     if build_task_import not in plugin:
         package_match = re.search(r"(?m)^package\s+[^\r\n]+\s*$", plugin)
