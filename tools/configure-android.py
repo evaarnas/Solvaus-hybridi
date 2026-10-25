@@ -12,6 +12,7 @@ ANDROID = ROOT / "src-tauri" / "gen" / "android"
 MANIFEST = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
 PROPERTIES = ANDROID / "app" / "tauri.properties"
 BUILD_TASK = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "BuildTask.kt"
+RUST_PLUGIN = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "RustPlugin.kt"
 CONFIG = ROOT / "src-tauri" / "tauri.conf.json"
 ACTIVITY = '            android:name=".MainActivity"'
 ORIENTATION = '            android:screenOrientation="portrait"'
@@ -124,6 +125,22 @@ def fix_build_task_package() -> None:
         source = source[:workdir_at] + env_setup + source[workdir_at:]
 
     BUILD_TASK.write_text(source, encoding="utf-8", newline="\n")
+
+    # Some Tauri CLI templates omit the package declaration on BuildTask.kt,
+    # while RustPlugin.kt references BuildTask as if both files shared a
+    # package. Add an explicit import so this remains valid if the generated
+    # plugin's package declaration changes between CLI versions.
+    if not RUST_PLUGIN.is_file():
+        raise SystemExit(f"Generated Rust plugin not found: {RUST_PLUGIN}")
+    plugin = RUST_PLUGIN.read_text(encoding="utf-8")
+    build_task_import = f"import {BUILD_TASK_PACKAGE.removeprefix('package ')}.BuildTask"
+    if build_task_import not in plugin:
+        package_match = re.search(r"(?m)^package\s+[^\r\n]+\s*$", plugin)
+        if not package_match:
+            raise SystemExit(f"Could not locate package declaration in {RUST_PLUGIN}")
+        plugin = plugin[:package_match.end()] + "\n\n" + build_task_import + plugin[package_match.end():]
+        RUST_PLUGIN.write_text(plugin, encoding="utf-8", newline="\n")
+
     print("Configured generated Rust build task package, Cargo, and Android NDK environment")
 
 
