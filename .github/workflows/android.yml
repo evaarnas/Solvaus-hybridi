@@ -79,7 +79,16 @@ jobs:
 
       - name: Build the APK
         working-directory: src-tauri
-        run: cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7; then
+            # Gradle can occasionally cache an incomplete transformed buildSrc.jar;
+            # the next invocation then can't load Tauri's generated RustPlugin.
+            # Drop only Gradle 9.6.1's transformed artifacts and retry once.
+            rm -rf "$HOME/.gradle/caches/9.6.1/transforms"
+            cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
