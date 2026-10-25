@@ -16,6 +16,10 @@ jobs:
   apk:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    env:
+      # Keep Gradle's mutable transform cache inside this job's disposable temp
+      # directory instead of using the runner image's shared ~/.gradle cache.
+      GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
     steps:
       - uses: actions/checkout@v4
 
@@ -78,21 +82,15 @@ jobs:
           sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
           grep -n -A1 '^android {' gen/android/app/build.gradle.kts
 
-      - name: Precompile Tauri's generated Rust Gradle plugin
-        working-directory: src-tauri/gen/android
-        run: ./gradlew --project-dir buildSrc --no-configuration-cache build
-
       - name: Build the APK
         working-directory: src-tauri
         shell: bash
         run: |
           set -o pipefail
           if ! cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7; then
-            # Gradle can occasionally cache an incomplete transformed buildSrc.jar;
-            # the next invocation then can't load Tauri's generated RustPlugin.
-            # Drop transformed artifacts and the generated project's config cache,
-            # then retry once with a clean buildSrc plugin transform.
-            rm -rf "$HOME"/.gradle/caches/*/transforms gen/android/.gradle/configuration-cache
+            # Discard this job's transformed buildSrc artifacts and config cache,
+            # then retry once with a clean generated-plugin transform.
+            rm -rf "$GRADLE_USER_HOME"/caches/*/transforms gen/android/.gradle/configuration-cache
             cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
           fi
 
