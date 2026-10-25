@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "src-tauri" / "gen" / "android"
 MANIFEST = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
 PROPERTIES = ANDROID / "app" / "tauri.properties"
+BUILD_SRC_GRADLE = ANDROID / "buildSrc" / "build.gradle.kts"
 BUILD_TASK = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "BuildTask.kt"
 RUST_PLUGIN = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "RustPlugin.kt"
 CONFIG = ROOT / "src-tauri" / "tauri.conf.json"
@@ -143,7 +144,17 @@ def fix_build_task_package() -> None:
         plugin = plugin[:package_match.end()] + "\n\n" + build_task_import + plugin[package_match.end():]
         RUST_PLUGIN.write_text(plugin, encoding="utf-8", newline="\n")
 
-    print("Configured generated Rust build task package, Cargo, and Android NDK environment")
+    if not BUILD_SRC_GRADLE.is_file():
+        raise SystemExit(f"Generated Android buildSrc Gradle file not found: {BUILD_SRC_GRADLE}")
+    gradle_build = BUILD_SRC_GRADLE.read_text(encoding="utf-8")
+    plugin_class = "com.gmail.solvaus.hybridi.kotlin.RustPlugin"
+    implementation_class = re.compile(r'(?m)^(\s*implementationClass\s*=\s*)"[^"]+"\s*$')
+    if not implementation_class.search(gradle_build):
+        raise SystemExit(f"Could not locate rust plugin implementationClass in {BUILD_SRC_GRADLE}")
+    gradle_build = implementation_class.sub(rf'\g<1>"{plugin_class}"', gradle_build, count=1)
+    BUILD_SRC_GRADLE.write_text(gradle_build, encoding="utf-8", newline="\n")
+
+    print("Configured generated Rust plugin class, Cargo, and Android NDK environment")
 
 
 def sync_version() -> None:
