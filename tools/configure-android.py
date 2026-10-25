@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,11 +26,10 @@ def fix_build_task_package() -> None:
     if not source.startswith(BUILD_TASK_PACKAGE + "\n") and not source.startswith(BUILD_TASK_PACKAGE + "\r\n"):
         if source.startswith("package "):
             raise SystemExit(f"Unexpected package declaration in {BUILD_TASK}")
-        if "class BuildTask : DefaultTask()" not in source:
+        if not re.search(r"(?:abstract\s+)?class BuildTask\s*:\s*DefaultTask\(\)", source):
             raise SystemExit(f"Unrecognized generated Rust build task: {BUILD_TASK}")
         source = BUILD_TASK_PACKAGE + "\n\n" + source
 
-    default_cargo = '        val executable = """cargo""";'
     cargo_resolver = '''        val cargoHome = System.getenv("CARGO_HOME")
             ?: File(System.getProperty("user.home"), ".cargo").absolutePath
         val cargoBin = File(cargoHome, "bin")
@@ -38,15 +38,24 @@ def fix_build_task_package() -> None:
             .firstOrNull { it.isFile }
             ?.absolutePath
             ?: "cargo"'''
-    if default_cargo in source:
-        source = source.replace(default_cargo, cargo_resolver, 1)
+    executable_line = re.compile(r'(?m)^[ \t]*val executable = """.*?""";\s*$')
+    if executable_line.search(source):
+        source = executable_line.sub(cargo_resolver, source, count=1)
     elif 'val cargoHome = System.getenv("CARGO_HOME")' not in source:
         raise SystemExit(f"Unrecognized Cargo executable setup in {BUILD_TASK}")
 
     if "import java.util.Properties" not in source:
         source = source.replace("import java.io.File\n", "import java.io.File\nimport java.util.Properties\n", 1)
 
-    ndk_environment = '''        val androidSdk = System.getenv("ANDROID_HOME")
+    host_and_ndk_bin = '''        val ndkHost = when {
+            System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> "windows-x86_64"
+            System.getProperty("os.name").startsWith("Mac", ignoreCase = true) -> "darwin-x86_64"
+            else -> "linux-x86_64"
+        }
+        val androidNdkBin = androidNdk?.let {
+            File(it, "toolchains/llvm/prebuilt/$ndkHost/bin")
+        }'''
+    ndk_declarations = '''        val androidSdk = System.getenv("ANDROID_HOME")
             ?: System.getenv("ANDROID_SDK_ROOT")
             ?: Properties().let { properties ->
                 val localProperties = File(project.rootDir, "local.properties")
@@ -65,28 +74,54 @@ def fix_build_task_package() -> None:
                 ?.maxByOrNull { it.name }
                 ?.absolutePath
         }
-        val androidNdkBin = androidNdk?.let {
-            File(it, "toolchains/llvm/prebuilt/windows-x86_64/bin")
+        val ndkHost = when {
+            System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> "windows-x86_64"
+            System.getProperty("os.name").startsWith("Mac", ignoreCase = true) -> "darwin-x86_64"
+            else -> "linux-x86_64"
         }
-        project.exec {
-            if (!androidSdk.isNullOrBlank()) environment("ANDROID_HOME", androidSdk)
-            if (!androidNdk.isNullOrBlank()) {
-                environment("ANDROID_NDK_HOME", androidNdk)
-                environment("NDK_HOME", androidNdk)
-            }
-            if (androidNdkBin?.isDirectory == true) {
-                environment(
-                    "PATH",
-                    androidNdkBin.absolutePath + File.pathSeparator + System.getenv("PATH").orEmpty()
-                )
-            }
-            workingDir(File(project.projectDir, rootDirRel))'''
-    default_exec = '''        project.exec {
-            workingDir(File(project.projectDir, rootDirRel))'''
-    if 'val androidNdkBin = androidNdk?.let {' not in source:
-        if default_exec not in source:
+        val androidNdkBin = androidNdk?.let {
+            File(it, "toolchains/llvm/prebuilt/$ndkHost/bin")
+        }'''
+    old_ndk_bin = '''        val androidNdkBin = androidNdk?.let {
+            File(it, "toolchains/llvm/prebuilt/windows-x86_64/bin")
+        }'''
+    if old_ndk_bin in source:
+        source = source.replace(old_ndk_bin, host_and_ndk_bin, 1)
+    elif 'val androidNdkBin = androidNdk?.let {' not in source:
+        run_function = source.find("    fun runTauriCli(executable: String) {")
+        args_line = re.search(r'(?m)^([ \t]*)val args = .*$', source[run_function:]) if run_function >= 0 else None
+        if not args_line:
+            raise SystemExit(f"Unrecognized Tauri CLI args in {BUILD_TASK}")
+        insert_at = run_function + args_line.end()
+        source = source[:insert_at] + "\n\n" + ndk_declarations + source[insert_at:]
+
+    if 'environment("ANDROID_NDK_HOME", androidNdk)' not in source:
+        exec_block = re.search(r'(?m)^([ \t]*)(?:project\.exec|execOperations\.exec)\s*\{\s*$', source)
+        workdir = (
+            re.search(
+                r'(?m)^([ \t]*)workingDir\(File\((?:project\.projectDir|projectDir), rootDirRel\)\)',
+                source[exec_block.end():],
+            )
+            if exec_block
+            else None
+        )
+        if not exec_block or not workdir:
             raise SystemExit(f"Unrecognized Rust build process setup in {BUILD_TASK}")
-        source = source.replace(default_exec, ndk_environment, 1)
+        indent = workdir.group(1)
+        env_setup = f'''{indent}if (!androidSdk.isNullOrBlank()) environment("ANDROID_HOME", androidSdk)
+{indent}if (!androidNdk.isNullOrBlank()) {{
+{indent}    environment("ANDROID_NDK_HOME", androidNdk)
+{indent}    environment("NDK_HOME", androidNdk)
+{indent}}}
+{indent}if (androidNdkBin?.isDirectory == true) {{
+{indent}    environment(
+{indent}        "PATH",
+{indent}        androidNdkBin.absolutePath + File.pathSeparator + System.getenv("PATH").orEmpty()
+{indent}    )
+{indent}}}
+'''
+        workdir_at = exec_block.end() + workdir.start()
+        source = source[:workdir_at] + env_setup + source[workdir_at:]
 
     BUILD_TASK.write_text(source, encoding="utf-8", newline="\n")
     print("Configured generated Rust build task package, Cargo, and Android NDK environment")

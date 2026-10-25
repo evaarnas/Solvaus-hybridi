@@ -282,6 +282,9 @@ fn build_gullicube() {
     if android {
         // Bionic rejects ARM64 executables whose PT_TLS alignment is below 64.
         command.arg(root.join("src/full/android_tls.cpp"));
+        // The Android NDK defaults C++ thread_local to emulated TLS. That keeps
+        // alignas(64) out of PT_TLS, so force native ELF TLS for the marker above.
+        command.arg("-fno-emulated-tls");
     }
     let built = out_dir.join(exe_name);
     command.arg("-o").arg(&built);
