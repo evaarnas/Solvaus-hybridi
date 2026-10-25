@@ -71,6 +71,8 @@ jobs:
 
       - name: Generate the Android project
         working-directory: src-tauri
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
         run: |
           cargo tauri android init --ci
           python ../tools/configure-android.py
@@ -87,6 +89,7 @@ jobs:
           GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
         run: |
           set -o pipefail
+          rm -rf gen/android/.gradle/configuration-cache
           if ! cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7; then
             # Discard this job's transformed buildSrc artifacts and config cache,
             # then retry once with a clean generated-plugin transform.
