@@ -52,7 +52,7 @@ if errorlevel 1 goto :fail
 
 echo Generating Android launcher icons...
 pushd "src-tauri"
-cargo tauri icon ..\store-assets\android-launcher-icon.png --output ..\target\tauri-icon-output
+cargo tauri icon ..\store-assets\android-launcher-icon.svg --output ..\target\tauri-icon-output
 set "ICON_EXIT=%ERRORLEVEL%"
 popd
 if not "%ICON_EXIT%"=="0" (
