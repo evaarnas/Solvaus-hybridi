@@ -50,15 +50,18 @@ echo Applying the tracked Android project settings...
 "%PYTHON%" tools\configure-android.py
 if errorlevel 1 goto :fail
 
-echo Generating Android launcher icons from the Play Store icon...
+echo Generating Android launcher icons...
 pushd "src-tauri"
-cargo tauri icon ..\store-assets\play-store-icon.png --output ..\target\tauri-icon-output
+cargo tauri icon ..\store-assets\android-launcher-icon.png --output ..\target\tauri-icon-output
 set "ICON_EXIT=%ERRORLEVEL%"
 popd
 if not "%ICON_EXIT%"=="0" (
     echo Android launcher icon generation failed with exit code %ICON_EXIT%.
     exit /b %ICON_EXIT%
 )
+
+"%PYTHON%" tools\install-android-icons.py target\tauri-icon-output\android
+if errorlevel 1 goto :fail
 
 echo.
 echo Android Studio project is ready at src-tauri\gen\android. No AAB was built.

@@ -78,7 +78,8 @@ jobs:
           python ../tools/configure-android.py
           # Generate the mobile launcher icons from their dedicated source image.
           # Keep desktop and iOS icon outputs outside the repository's icon folder.
-          cargo tauri icon ../store-assets/play-store-icon.png --output "$RUNNER_TEMP/tauri-icon-output"
+          cargo tauri icon ../store-assets/android-launcher-icon.png --output "$RUNNER_TEMP/tauri-icon-output"
+          python ../tools/install-android-icons.py "$RUNNER_TEMP/tauri-icon-output/android"
           # Gullicube ships as a libgullicube.so executable; it must be extracted to disk to run.
           sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
           grep -n -A1 '^android {' gen/android/app/build.gradle.kts
