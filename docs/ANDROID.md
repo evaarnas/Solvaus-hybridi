@@ -19,13 +19,13 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
   ```sh
   cargo tauri android init
   python ../tools/configure-android.py
-  cargo tauri icon ../store-assets/android-launcher-icon.svg --output ../target/tauri-icon-output
+  cargo tauri icon ../store-assets/android-launcher-icon.png --output ../target/tauri-icon-output
   python ../tools/install-android-icons.py ../target/tauri-icon-output/android
   cargo tauri android build --debug --features custom-protocol --apk
   ```
 
-  Android launcher icon PNGs are generated from `store-assets/android-launcher-icon.svg`. It uses
-  a white background, black grid lines, and extra room around the cube for Android's circular
+  Android launcher icon PNGs are generated from `store-assets/android-launcher-icon.png`. It uses
+  the original cube artwork on white, with black grid lines and extra room for Android's circular
   launcher mask. The generated Android resources are copied into `gen/android/app/src/main/res`;
   desktop and iOS icon outputs stay outside `src-tauri/icons`.
 
