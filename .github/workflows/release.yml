@@ -99,8 +99,8 @@ jobs:
           fi
           python3 tools/gen-index.py --check
           python3 tools/frontend-smoke.py
-          cargo metadata --offline --no-deps >/dev/null
-          cargo metadata --offline --no-deps --manifest-path src-tauri/Cargo.toml >/dev/null
+          cargo metadata --locked --no-deps >/dev/null
+          cargo metadata --locked --no-deps --manifest-path src-tauri/Cargo.toml >/dev/null
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Refuse to overwrite a published or unapproved draft
@@ -204,7 +204,7 @@ jobs:
         timeout-minutes: 15
         shell: bash
         run: >-
-          cargo test --release --offline -p cube_wasm --lib
+          cargo test --release --locked -p cube_wasm --lib
           tests::native_n11_sticker_entrypoint_solves_and_replays
           -- --ignored --exact --nocapture
 
