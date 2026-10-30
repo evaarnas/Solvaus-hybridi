@@ -214,7 +214,9 @@ jobs:
         shell: bash
         run: |
           compiler="$(xcrun --find clang++)"
+          sdk="$(xcrun --sdk macosx --show-sdk-path)"
           "$compiler" --version
+          echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
           echo "GULLICUBE_CXX=$compiler" >> "$GITHUB_ENV"
 
       - name: Build unsigned Tauri bundles
