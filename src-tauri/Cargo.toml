@@ -1,6 +1,6 @@
 [package]
 name = "cube-solver"
-version = "0.1.0"
+version = "0.2.12"
 description = "Solvaus-hybridi — N×N cube solver studio"
 authors = ["Adam Nolle et al"]
 edition = "2021"
