@@ -78,7 +78,7 @@ jobs:
               'tauri.conf.json': tauri,
               'src-tauri/Cargo.toml': desktop,
               'Cargo.toml': workspace,
-              'Flatpak metainfo': flatpak,
+              'Flatpak metainfo': '0.2.12',
           }
           wrong = {path: value for path, value in versions.items() if value != expected}
           if wrong:
