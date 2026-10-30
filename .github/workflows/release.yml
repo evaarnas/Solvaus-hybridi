@@ -209,6 +209,14 @@ jobs:
           tests::native_n11_sticker_entrypoint_solves_and_replays
           -- --ignored --exact --nocapture
 
+      - name: Configure macOS C++ compiler
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          compiler="$(xcrun --find clang++)"
+          "$compiler" --version
+          echo "GULLICUBE_CXX=$compiler" >> "$GITHUB_ENV"
+
       - name: Build unsigned Tauri bundles
         working-directory: src-tauri
         shell: bash
