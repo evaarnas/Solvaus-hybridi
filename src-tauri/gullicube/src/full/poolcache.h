@@ -5,6 +5,9 @@
 #include "../pair/pool.h"
 #include <chrono>
 #include <filesystem>
+#if defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 namespace poolcache {
 template <class T> static void wr(FILE *f, const std::vector<T> &v) {
@@ -19,10 +22,16 @@ template <class T> static bool rd(FILE *f, std::vector<T> &v) {
   return !n || fread(v.data(), sizeof(T), n, f) == n;
 }
 static double mtime(const std::string &fn) {
+#if defined(__APPLE__)
+  struct stat info;
+  if (stat(fn.c_str(), &info) != 0) return -1;
+  return static_cast<double>(info.st_mtime);
+#else
   std::error_code ec;
   auto t = std::filesystem::last_write_time(fn, ec);
   if (ec) return -1;
   return (double)std::chrono::duration_cast<std::chrono::seconds>(t.time_since_epoch()).count();
+#endif
 }
 }  // namespace poolcache
 
