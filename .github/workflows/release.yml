@@ -323,13 +323,19 @@ jobs:
         run: |
           set -euo pipefail
           bundle_root="src-tauri/target/${{ matrix.target }}/release/bundle"
-          app="$bundle_root/macos/Cube Solver.app"
           shopt -s nullglob
+          apps=("$bundle_root"/macos/*.app)
           dmgs=("$bundle_root"/dmg/*.dmg)
-          [[ -d "$app" && ${#dmgs[@]} -eq 1 ]]
+          [[ ${#apps[@]} -eq 1 && ${#dmgs[@]} -eq 1 ]] || {
+            echo "expected one macOS app and one DMG in $bundle_root" >&2
+            exit 1
+          }
+          app="${apps[0]}"
+          app_name="$(basename "$app")"
+          expected_identifier="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["identifier"])')"
           plist="$app/Contents/Info.plist"
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")" == "$VERSION" ]]
-          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" == "io.github.adamnolle.cubesolver" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")" == "$expected_identifier" ]]
           archs="$(lipo -archs "$app/Contents/MacOS/cube-solver")"
           [[ "$archs" == *arm64* && "$archs" == *x86_64* ]] || {
             echo "universal binary missing an architecture: $archs" >&2
@@ -360,10 +366,10 @@ jobs:
           smoke_app "$app" app
           hdiutil attach -readonly -nobrowse -mountpoint /tmp/cube-dmg "${dmgs[0]}" >/tmp/hdiutil-attach.log
           trap 'hdiutil detach /tmp/cube-dmg -force >/dev/null 2>&1 || true' EXIT
-          dmg_app="/tmp/cube-dmg/Cube Solver.app"
+          dmg_app="/tmp/cube-dmg/$app_name"
           [[ -x "$dmg_app/Contents/MacOS/cube-solver" ]]
           [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$dmg_app/Contents/Info.plist")" == "$VERSION" ]]
-          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$dmg_app/Contents/Info.plist")" == "io.github.adamnolle.cubesolver" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$dmg_app/Contents/Info.plist")" == "$expected_identifier" ]]
           dmg_archs="$(lipo -archs "$dmg_app/Contents/MacOS/cube-solver")"
           [[ "$dmg_archs" == *arm64* && "$dmg_archs" == *x86_64* ]]
           if codesign --verify --deep --strict "$dmg_app" >/tmp/cube-dmg-app-codesign.log 2>&1; then
