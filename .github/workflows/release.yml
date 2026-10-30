@@ -141,7 +141,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             bundles: deb
           - label: macOS universal
-            os: macos-14
+            os: macos-15
             artifact: release-macos-universal
             target: universal-apple-darwin
             bundles: app,dmg
@@ -232,7 +232,7 @@ jobs:
           set -euo pipefail
           exe=gullicube-bundle/gullicube
           [[ "$RUNNER_OS" == Windows ]] && exe=gullicube-bundle/gullicube.exe
-          [[ -s "$exe" ]] || { echo "Gullicube was not built; no C++ compiler found" >&2; exit 1; }
+          [[ -s "$exe" ]] || { echo "Gullicube executable was not staged; inspect the build-script warnings above" >&2; exit 1; }
           [[ -n "$(ls gullicube-bundle/data)" ]] || { echo "Gullicube data missing" >&2; exit 1; }
           if [[ "$RUNNER_OS" == macOS ]]; then
             lipo -archs "$exe" | tee /dev/stderr | grep -q arm64
