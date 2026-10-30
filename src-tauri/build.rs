@@ -219,19 +219,25 @@ fn build_gullicube() {
     let exe = profile_dir.join(exe_name);
 
     println!("cargo:rerun-if-env-changed=GULLICUBE_CXX");
-    // The Rust toolchain may be MSVC, which cannot build gullicube: fall back to a
-    // GCC/Clang on PATH (or GULLICUBE_CXX).
-    let gnu_like = cc::Build::new()
-        .cpp(true)
-        .try_get_compiler()
-        .ok()
-        .filter(|c| c.is_like_gnu() || c.is_like_clang());
+    // Honor an explicit override before cc's automatic compiler selection. This
+    // matters for universal macOS builds, where the selected C++ driver must
+    // support both architectures.
+    let explicit_compiler = std::env::var("GULLICUBE_CXX").ok();
+    let gnu_like = if explicit_compiler.is_some() {
+        None
+    } else {
+        cc::Build::new()
+            .cpp(true)
+            .try_get_compiler()
+            .ok()
+            .filter(|c| c.is_like_gnu() || c.is_like_clang())
+    };
     let mut command = match gnu_like {
         Some(compiler) => compiler.to_command(),
         None => {
-            let mut candidates: Vec<String> = match std::env::var("GULLICUBE_CXX") {
-                Ok(c) => vec![c],
-                Err(_) => vec!["g++".to_string(), "clang++".to_string()],
+            let mut candidates: Vec<String> = match explicit_compiler {
+                Some(c) => vec![c],
+                None => vec!["g++".to_string(), "clang++".to_string()],
             };
             if cfg!(windows) {
                 for root in ["C:\\msys64", "C:\\mingw64", "C:\\msys2"] {
