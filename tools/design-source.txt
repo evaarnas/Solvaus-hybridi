@@ -1170,8 +1170,9 @@ class Component extends DCLogic {
   showSolution() {
     if (this.mode === 'texture') {
       const moveCount = this.realMoveCount || this.totalMoves;
+      const solverName = this.realWinner === 'gullicube' ? 'Gullicube beam-search reduction' : 'RCube center, corner, and edge reduction';
       this.ui.solCount.textContent = moveCount.toLocaleString();
-      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">RCube center, corner, and edge reduction — ' + moveCount.toLocaleString() + (isTrustedResult(this) ? ' moves (replay check skipped).' : ' verified moves.') + '</span>';
+      this.ui.solChips.innerHTML = '<span style="font-size:12px;color:#8C887F;line-height:1.5;">' + solverName + ' — ' + moveCount.toLocaleString() + (isTrustedResult(this) ? ' moves (replay check skipped).' : ' verified moves.') + '</span>';
       return;
     }
     const moves = this.lastSolution;
