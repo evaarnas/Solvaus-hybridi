@@ -76,9 +76,13 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
               stat=el.querySelector('[data-stat]'), star=el.querySelector('[data-star]');
         const isWin = (k===winnerKey);
         const p = isWin?100:Math.max(0,Math.min(100,(L.pct|0)));
+        var laneLabel = L.label || 'solved';
+        if (L.solved && Number.isFinite(Number(L.moveCount))){
+          laneLabel = laneLabel.replace(String(L.moveCount)+' moves', Number(L.moveCount).toLocaleString()+' moves');
+        }
         if(fill) fill.style.width = p+'%';
         if(pct){ pct.textContent = p+'%'; pct.style.color = (L.solved||isWin)?'#1BA64B':''; }
-        if (stat) stat.textContent = isWin ? (engineName(L.id)+' solved · '+Number(moves).toLocaleString()+' moves'+((lanes||[]).length>1&&L.label?' — '+L.label.replace(/^[^:]*: /,''):'')) : (L.solved?(L.label||'solved'):(L.label||'searching…'));
+        if (stat) stat.textContent = isWin ? (engineName(L.id)+' solved · '+Number(moves).toLocaleString()+' moves'+((lanes||[]).length>1&&L.label?' — '+laneLabel.replace(/^[^:]*: /,''):'')) : (L.solved?laneLabel:(L.label||'searching…'));
         if(star) star.style.display = isWin ? 'inline' : 'none';
       });
     }
