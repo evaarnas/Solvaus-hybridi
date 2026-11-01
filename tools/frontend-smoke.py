@@ -463,7 +463,7 @@ def main() -> int:
         "onProgress:progressChannel",
         "updateNativeSolveProgress",
         "estimateName + ' estimated solve progress '",
-        "laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed)",
+        "laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(laneElapsed)",
         "var SOLVE_MAX_N = nativeCore() ? 1001 : 21",
         "function hasNativeReduction(self){ return !!nativeCore() && (self.n||0) >= 4 && (self.n||0) <= SOLVE_MAX_N; }",
         "core.invoke('scramble_rcube'",
