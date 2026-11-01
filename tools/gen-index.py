@@ -395,14 +395,6 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       // length, so the lane agrees with the proof box and the README.
       var moves = (this.realMoveCount != null) ? this.realMoveCount : (this.lastSolution||[]).length;
       lanesUpdate(this, this.realLanes || [], winnerKey, moves);
-      // Keep the losing lane's final live elapsed counter instead of replacing
-      // it with a per-engine duration that can round down to 0.0s.
-      var frozenLoser = this._nativeLoserLaneStat;
-      if (isNativeWinner(this.realWinner) && frozenLoser){
-        var loserLane = this.root.querySelector('[data-lane="'+frozenLoser.key+'"]');
-        var loserStat = loserLane && loserLane.querySelector('[data-stat]');
-        if (loserStat) loserStat.textContent = frozenLoser.text;
-      }
     };
 
     // The solution panel must show the standard face-turn notation (e.g. "U2",
@@ -880,20 +872,8 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         }
       }
       self._lastSolveTelemetry = { n:self.n, elapsedMs:elapsedMs, verified:!compactNativeTextureResult, trusted:compactNativeTextureResult, moveCount:res.moveCount, winner:res.winner };
-      self._nativeLoserLaneStat = null;
       if (isNativeWinner(res.winner) && res.lanes && res.lanes.length > 1){
-        var loserKey = res.winner === 'gullicube' ? 'det' : 'beam';
-        var loserLane = self.root.querySelector('[data-lane="'+loserKey+'"]');
-        var loserStat = loserLane && loserLane.querySelector('[data-stat]');
-        if (loserStat){
-          var loserId = res.winner === 'gullicube' ? 'rcube' : 'gullicube';
-          var loserResult = res.lanes.find(function(lane){ return lane.id === loserId; });
-          var loserText = loserResult && loserResult.solved
-            ? engineName(loserId)+': '+Number(loserResult.moveCount).toLocaleString()+' moves · lost · elapsed '+elapsedLabel(elapsedMs)
-            : engineName(loserId)+': '+((loserResult && loserResult.label) || 'no solution');
-          self._nativeLoserLaneStat = {key:loserKey,text:loserText};
-          loserStat.textContent = loserText;
-        }
+        lanesUpdate(self, res.lanes, KEYS[res.winner] || 'det', res.moveCount);
       }
       self.realWinner = res.winner; self.realLanes = res.lanes || [];
       if (isNativeWinner(res.winner)){
