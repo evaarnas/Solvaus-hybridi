@@ -473,6 +473,7 @@ class Component extends DCLogic {
     ground.position.y = -1.62;
     ground.receiveShadow = true;
     this.scene.add(ground);
+    this.shadowGround = ground;
 
     this.cubeGroup = new T.Group();
     this.cubeGroup.rotation.set(0.5, -0.62, 0);
@@ -1305,6 +1306,13 @@ class Component extends DCLogic {
           } else if (this.autoSpin && !this.activeMove && !this.scrambled) {
             this.cubeGroup.rotation.y += 0.0024;
           }
+        }
+        if (this.mode === 'texture' && this.shadowGround && this.cubeGroup) {
+          this.cubeGroup.updateMatrixWorld(true);
+          const e = this.cubeGroup.matrixWorld.elements;
+          const half = 1.25;
+          const verticalRadius = half * (Math.abs(e[1]) + Math.abs(e[5]) + Math.abs(e[9]));
+          this.shadowGround.position.y = e[13] - verticalRadius - 0.16;
         }
         this.renderer.render(this.scene, this.camera);
       }
