@@ -67,33 +67,6 @@ pub fn warm_solver() {
     with_kociemba(|_| {});
 }
 
-fn reduction_time_limit(n: usize) -> Duration {
-    let seconds: u64 = if n <= 5 {
-        28
-    } else if n <= 8 {
-        115
-    } else {
-        290
-    };
-    // Debug test binaries are substantially slower on hosted Windows and run
-    // several solver tests concurrently. Keep the product watchdog unchanged,
-    // but give correctness tests a finite margin so scheduler contention cannot
-    // masquerade as a solver failure.
-    #[cfg(test)]
-    let seconds = seconds.saturating_mul(4);
-    Duration::from_secs(seconds)
-}
-
-fn wasm_reduction_time_limit(n: usize) -> Duration {
-    if n <= 8 {
-        reduction_time_limit(n)
-    } else {
-        // Leave time for replay verification and result serialization under the
-        // browser's ten-minute solve watchdog.
-        Duration::from_secs(570)
-    }
-}
-
 /// A tiny deterministic RNG (xorshift64*) so scrambles are reproducible by seed
 /// without pulling OS entropy.
 struct Rng(u64);
@@ -334,11 +307,9 @@ impl CubeLab {
     /// `solve` falls back to the legacy engine race). Solves a CLONE — `solve_reduction`
     /// mutates its cube to solved — so `self.cube` stays scrambled for the animation.
     fn try_reduction(&mut self) -> Option<String> {
-        // Finish before the browser's worker watchdog so timeout can unwind through
-        // reduction loops cleanly; worker termination remains the hard-stop backstop.
-        let control = cube_solver::reduction::ReductionControl::with_timeout(
-            wasm_reduction_time_limit(self.n),
-        );
+        // Let the solve run until it finishes or the user cancels it. The worker
+        // can be terminated by the UI; native callers cancel through the control.
+        let control = cube_solver::reduction::ReductionControl::unlimited();
         #[cfg(target_arch = "wasm32")]
         {
             return cube_solver::reduction::with_progress_observer(
@@ -409,7 +380,7 @@ impl CubeLab {
     /// replay-verified) solution. 3×3 uses the two-phase solver; 4×4+ (up to
     /// `MAX_REDUCTION`) uses the reduction method; other sizes use the legacy engine
     /// race. Returns a JSON summary.
-    pub fn solve(&mut self, max_depth: usize, time_ms: f64) -> String {
+    pub fn solve(&mut self, max_depth: usize) -> String {
         let snapshot = self.cube.clone_snapshot();
         // 3×3: the two-phase (Kociemba) solver returns a verified solution for ANY
         // scramble — not just the <=9-move ones the legacy search can reach. Fall
@@ -420,7 +391,7 @@ impl CubeLab {
             }
         }
         // 4×4 and up: the reduction method returns a verified real solution. The
-        // browser supports up to 21×21 with a size-aware deadline and worker watchdog.
+        // browser supports up to 21×21 and relies on cancellation rather than a deadline.
         const MAX_REDUCTION: usize = 21;
         if self.n > 3 && self.n <= MAX_REDUCTION {
             if let Some(json) = self.try_reduction() {
@@ -429,13 +400,12 @@ impl CubeLab {
         }
         let depth = max_depth.clamp(1, 9);
         let mut budget = SolverBudget::for_depth(depth);
-        budget.time_limit = Duration::from_millis(time_ms.max(50.0) as u64);
+        budget.time_limit = Duration::MAX;
         // The web UI scrambles with outer-face turns only, so the solver searches
         // the same (outer) move set — guaranteeing it can invert the scramble.
         budget.max_wide = 1;
-        // Scale the search budget with depth so deeper scrambles still solve, but
-        // cap it so a hard scramble can never freeze the page for more than a
-        // moment (the meet-in-the-middle frontier grows ~18^(depth/2)).
+        // Scale the node budget with depth (the meet-in-the-middle frontier grows
+        // ~18^(depth/2)); the worker can still be canceled at any time.
         let half = depth.div_ceil(2) as u32;
         budget.max_nodes = 18usize
             .saturating_pow(half)
@@ -446,7 +416,7 @@ impl CubeLab {
         // slice (just for the race display), so a deep solve never runs all three
         // at full budget.
         let mut secondary = budget;
-        secondary.time_limit = Duration::from_millis(280);
+        secondary.time_limit = Duration::MAX;
         secondary.max_nodes = 60_000;
         let run = run_solver_lab_tiered(snapshot, budget, secondary);
 
@@ -541,8 +511,8 @@ impl CubeLab {
 pub use cube_solver::reduction::ReductionControl as NativeReductionControl;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn native_reduction_control(n: usize) -> NativeReductionControl {
-    NativeReductionControl::with_timeout(reduction_time_limit(n))
+pub fn native_reduction_control(_n: usize) -> NativeReductionControl {
+    NativeReductionControl::unlimited()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -568,20 +538,6 @@ pub fn solve_reduction_sticker_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn browser_reduction_budget_is_ten_minutes_without_extending_native_budget() {
-        let test_margin = if cfg!(test) { 4 } else { 1 };
-        assert_eq!(
-            wasm_reduction_time_limit(8),
-            Duration::from_secs(115 * test_margin)
-        );
-        assert_eq!(wasm_reduction_time_limit(21), Duration::from_secs(570));
-        assert_eq!(
-            reduction_time_limit(21),
-            Duration::from_secs(290 * test_margin)
-        );
-    }
 
     #[test]
     fn sticker_state_boundary_round_trips_without_scramble_history() {
@@ -617,7 +573,7 @@ mod tests {
             }
             assert!(!lab.is_solved(), "n={n} should be scrambled");
 
-            let json = lab.solve(8, 3000.0);
+            let json = lab.solve(8);
             let v: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert!(v["found"].as_bool().unwrap(), "no solution found for n={n}");
 
@@ -647,7 +603,7 @@ mod tests {
                 lab.apply_design_move(axis, layer, dir);
             }
             assert!(!lab.is_solved(), "n={n} should be scrambled");
-            let v: serde_json::Value = serde_json::from_str(&lab.solve(8, 3000.0)).unwrap();
+            let v: serde_json::Value = serde_json::from_str(&lab.solve(8)).unwrap();
             assert!(v["found"].as_bool().unwrap(), "n={n} no solution");
             assert_eq!(
                 v["winner"], "reduction",
@@ -752,7 +708,7 @@ mod tests {
                 lab.apply_design_move(axis, layer, dir);
                 applied += 1;
             }
-            let v: serde_json::Value = serde_json::from_str(&lab.solve(depth, 5000.0)).unwrap();
+            let v: serde_json::Value = serde_json::from_str(&lab.solve(depth)).unwrap();
             assert!(v["found"].as_bool().unwrap(), "depth {depth} not solved");
             for m in v["moves"].as_array().unwrap() {
                 lab.apply_design_move(
@@ -784,7 +740,7 @@ mod tests {
             !lab.is_solved(),
             "a 40-move scramble should not already be solved"
         );
-        let v: serde_json::Value = serde_json::from_str(&lab.solve(20, 5000.0)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&lab.solve(20)).unwrap();
         assert!(
             v["found"].as_bool().unwrap(),
             "deep 3x3 reported no solution"

@@ -680,19 +680,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       this._solveJobId = (this._solveJobId || 0) + 1;
       this._solveRequestToken = solveRequestToken();
       var solveJobId = this._solveJobId;
-      // Keep room for the WASM reduction deadline to unwind and replay-verify.
       var _sw = this;
-      // Browser reduction has a 570-second deadline for 9×9–21×21; desktop RCube
-      // keeps its existing 290-second solve budget.
-      var watchdogMs = this.n <= 3 ? 8000 : this.n <= 5 ? 30000 : this.n <= 8 ? 120000 : (nativeCore() ? 300000 : 600000);
-      clearTimeout(this._solveWatchdog);
-      this._solveWatchdog = setTimeout(function(){
-        if (!_sw._solvePending || _sw._solveJobId !== solveJobId) return;
-        abortPendingSolve(_sw);
-        _sw._lastSolveTelemetry = { n:_sw.n, elapsedMs:_sw._solveElapsedMs||watchdogMs, verified:false, error:'Solve timed out' };
-        if (_sw.ui && _sw.ui.status) _sw.ui.status.textContent = 'Solve timed out — try a smaller cube or shallower scramble';
-        if (_sw.syncControls) _sw.syncControls();
-      }, watchdogMs);
       if (this.ui && this.ui.status) this.ui.status.textContent = 'Starting solver…';
       if (this.startLanes) this.startLanes();
       if (this.scrollToSolverLanesOnAndroid) this.scrollToSolverLanesOnAndroid();
@@ -711,8 +699,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           clearTimeout(this._workerLoadTimer);
           this._workerLoadTimer = setTimeout(function(){
             if (!_sw._solvePending || _sw._workerReady) return;
-            if (_sw.n <= 3) runSmallFallback(_sw);
-            else handleWorkerFailure(_sw);
+            handleWorkerFailure(_sw);
           }, 1500);
         }
       }
@@ -728,21 +715,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       // Send only the visible sticker state. The worker never receives the
       // scramble sequence, so its verified path cannot be a hidden inverse.
       var colors = self.lab.face_colors(self.n);
-      self._worker.postMessage({ type:'solve', jobId:self._solveJobId, n:self.n, depth:self.scrambleDepth||6, time:6000, colors:colors });
-    }
-
-    function runSmallFallback(self){
-      if (!self._solvePending || self._solveDispatch) return;
-      self._solveDispatch = 'fallback';
-      clearTimeout(self._workerLoadTimer);
-      startSolveActivity(self);
-      var jobId = self._solveJobId;
-      self._fallbackTimer = setTimeout(function(){
-        self._fallbackTimer = null;
-        if (!self._solvePending || self._solveJobId !== jobId) return;
-        var r; try { r = self.lab.solve(Math.min(self.scrambleDepth||6, 9), 1500); } catch(e){ r = '{"found":false}'; }
-        onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:r });
-      }, 0);
+      self._worker.postMessage({ type:'solve', jobId:self._solveJobId, n:self.n, depth:self.scrambleDepth||6, colors:colors });
     }
 
     function handleWorkerFailure(self){
@@ -753,8 +726,6 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self._worker = null;
       if (!self._solvePending) return;
       self._solveDispatch = null;
-      if (self.n <= 3){ runSmallFallback(self); return; }
-      clearTimeout(self._solveWatchdog);
       stopSolveActivity(self);
       self._lastSolveTelemetry = { n:self.n, elapsedMs:self._solveElapsedMs||0, verified:false, error:'Solver worker unavailable' };
       self._solvePending = false;
@@ -790,15 +761,12 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       }
       return self._worker;
     }
-    // Stop an in-flight worker solve or a not-yet-started fallback. Returns true
-    // when an operation was pending; a synchronous fallback already executing
-    // cannot receive events until it returns, but duplicate dispatch is prevented.
+    // Stop an in-flight worker or native solve. Returns true when an operation
+    // was pending.
     function abortPendingSolve(self){
       if (!self._solvePending) return false;
       var dispatch = self._solveDispatch, requestToken = self._solveRequestToken;
-      clearTimeout(self._solveWatchdog);
       clearTimeout(self._workerLoadTimer);
-      clearTimeout(self._fallbackTimer);
       stopSolveActivity(self);
       if (dispatch === 'native' && nativeCore()){
         nativeCore().invoke('cancel_solve', { requestToken:requestToken }).catch(function(){});
@@ -818,9 +786,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
     }
     function onSolveResult(self, data){
       if (!self._solvePending || !data || data.jobId !== self._solveJobId) return;
-      clearTimeout(self._solveWatchdog);
       clearTimeout(self._workerLoadTimer);
-      clearTimeout(self._fallbackTimer);
       stopSolveActivity(self);
       var elapsedMs = self._solveElapsedMs || 0;
       self._solvePending = false;
@@ -1023,9 +989,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
     }
     var origUnmount = inst.componentWillUnmount ? inst.componentWillUnmount.bind(inst) : null;
     inst.componentWillUnmount = function(){
-      clearTimeout(this._solveWatchdog);
       clearTimeout(this._workerLoadTimer);
-      clearTimeout(this._fallbackTimer);
       clearInterval(this._solveHeartbeat);
       clearInterval(this._replayHeartbeat);
       if (this._solvePending && this._solveDispatch === 'native' && nativeCore()){

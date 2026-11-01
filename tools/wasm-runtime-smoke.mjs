@@ -25,7 +25,7 @@ function smokeReduction(n, setup) {
   assert.equal(solver.is_solved(), false, 'smoke state must be scrambled');
 
   const started = performance.now();
-  const result = JSON.parse(solver.solve(6, 6_000));
+  const result = JSON.parse(solver.solve(6));
   assert.equal(result.found, true, `WASM ${n}x${n} reduction failed: ${JSON.stringify(result)}`);
   assert.equal(result.winner, 'reduction');
 
