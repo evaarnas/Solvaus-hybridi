@@ -498,18 +498,20 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       var estimatedProgress = (self._laneSolveProgress && Number.isFinite(self._laneSolveProgress[laneKey]))
         ? self._laneSolveProgress[laneKey]
         : ((self._solveDispatch === 'native' || self._solveDispatch === 'worker') && Number.isFinite(self._nativeSolveProgress) ? self._nativeSolveProgress : null);
+      var laneElapsed = self._laneSolveElapsedMs && Number.isFinite(self._laneSolveElapsedMs[laneKey])
+        ? self._laneSolveElapsedMs[laneKey] : elapsed;
       var lane = self.root.querySelector('[data-lane="'+laneKey+'"]');
       if (lane){
         var stat=lane.querySelector('[data-stat]'), fill=lane.querySelector('[data-fill]'), pct=lane.querySelector('[data-pct2]');
         if (estimatedProgress === null){
           lane.removeAttribute('aria-valuenow'); lane.setAttribute('aria-valuetext','Solver active');
-          if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(elapsed);
+          if (stat) stat.textContent = 'working from sticker state · ' + elapsedLabel(laneElapsed);
           if (pct){ pct.textContent = 'LIVE'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width='28%'; fill.style.opacity='0.65'; fill.style.transform='translateX('+travel+'%)'; fill.style.transition='transform .5s linear'; }
         } else {
           lane.setAttribute('aria-valuenow', String(estimatedProgress));
           lane.setAttribute('aria-valuetext', laneName + ' estimated solve progress ' + estimatedProgress + '%');
-          if (stat) stat.textContent = laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(elapsed);
+          if (stat) stat.textContent = laneName + ' estimate · ' + estimatedProgress + '% · elapsed ' + elapsedLabel(laneElapsed);
           if (pct){ pct.textContent = estimatedProgress + '%'; pct.style.color = '#1573E6'; }
           if (fill){ fill.style.width=estimatedProgress+'%'; fill.style.opacity='1'; fill.style.transform='none'; fill.style.transition='width .25s linear'; }
         }
@@ -549,6 +551,13 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       } else {
         self._laneSolveProgress.beam = self._nativeSolveProgress;
       }
+      if (!self._laneSolveElapsedMs) self._laneSolveElapsedMs = {};
+      var elapsed = performance.now() - (self._solveStartedAt || performance.now());
+      ['det','beam'].forEach(function(key){
+        if (self._laneSolveProgress[key] >= 100 && !Number.isFinite(self._laneSolveElapsedMs[key])){
+          self._laneSolveElapsedMs[key] = elapsed;
+        }
+      });
       var progressLabel = self.root.querySelector('[data-native-solve-progress]');
       if (progressLabel) progressLabel.textContent = self._nativeSolveProgress + '%';
       if (self.setSolvedPct) self.setSolvedPct(self._nativeSolveProgress / 100);
@@ -558,6 +567,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self._solveStartedAt = performance.now();
       self._nativeSolveProgress = null;
       self._laneSolveProgress = null;
+      self._laneSolveElapsedMs = {};
       clearInterval(self._solveHeartbeat);
       refreshSolveActivity(self);
       self._solveHeartbeat = setInterval(function(){ refreshSolveActivity(self); }, 500);
@@ -596,6 +606,10 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       self._solveHeartbeat = null;
       self._nativeSolveProgress = null;
       self._solveElapsedMs = self._solveStartedAt ? performance.now() - self._solveStartedAt : 0;
+      if (!self._laneSolveElapsedMs) self._laneSolveElapsedMs = {};
+      ['det','beam'].forEach(function(key){
+        if (!Number.isFinite(self._laneSolveElapsedMs[key])) self._laneSolveElapsedMs[key] = self._solveElapsedMs;
+      });
       self._solveStatusKey = null;
       var badge=self.root.querySelector('[data-solve-elapsed]'); if (badge) badge.style.display='none';
       ['det','beam'].forEach(function(k){
