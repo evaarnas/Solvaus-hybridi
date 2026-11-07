@@ -1225,6 +1225,12 @@ class Component extends DCLogic {
   syncControls() {
     const nsl = this.q('[data-nslider]'); if (nsl) nsl.value = this.nToSlider(this.n);
     const nv = this.q('[data-nval]'); if (nv) nv.textContent = `${this.n}×${this.n}`;
+    const copy = this.q('[data-copy]');
+    if (copy) {
+      const notationUnavailable = this.n > 21;
+      copy.hidden = notationUnavailable;
+      copy.style.display = notationUnavailable ? 'none' : 'flex';
+    }
     // speed
     this.qa('[data-speed]').forEach(b => {
       const on = b.dataset.speed === (this.speed || 'normal');
