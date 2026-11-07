@@ -9,14 +9,13 @@ This distinction matters. A checksum proves that a download was not corrupted af
 
 ## Version contract
 
-The same semantic version must appear in:
+Prepare a release from one version argument instead of editing each copy by hand:
 
-- `Cargo.toml` under `[workspace.package]`,
-- `src-tauri/Cargo.toml`,
-- `src-tauri/tauri.conf.json`,
-- the newest release in `packaging/flatpak/io.github.adamnolle.cubesolver.metainfo.xml`.
+```sh
+python3 tools/prepare-release.py 0.2.16
+```
 
-The workflow tag is `v` plus that version, for example `v0.2.15`.
+The command updates Cargo and Tauri versions, lockfiles, Flatpak metadata, and the draft workflow's default tag. It derives Android's monotonically increasing `versionCode` from the semantic version (`0.2.16` becomes `2016`) and drafts release notes from commit subjects since the previous release notes. Supply repeated `--note` arguments to replace the automatic notes with a curated list. It does not create a Git tag or GitHub release. Review the generated metadata and notes, then run the checks below before starting the draft workflow.
 
 ## Create the draft
 
