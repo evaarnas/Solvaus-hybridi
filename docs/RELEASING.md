@@ -16,13 +16,13 @@ The same semantic version must appear in:
 - `src-tauri/tauri.conf.json`,
 - the newest release in `packaging/flatpak/io.github.adamnolle.cubesolver.metainfo.xml`.
 
-The workflow tag is `v` plus that version, for example `v0.1.0`.
+The workflow tag is `v` plus that version, for example `v0.2.15`.
 
 ## Create the draft
 
 1. Ensure `main` is clean, pushed, and green in both **CI** and **Desktop app** workflows.
 2. Open **Actions → Draft release → Run workflow**.
-3. Enter the matching tag, such as `v0.1.0`.
+3. Enter the matching tag, such as `v0.2.15`.
 4. Leave `replace_existing_draft` disabled for the first run.
 5. Wait for all matrix and assembly jobs to pass.
 6. Inspect the resulting draft release; do not publish it.
