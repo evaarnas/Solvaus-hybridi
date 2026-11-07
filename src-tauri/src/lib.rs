@@ -95,6 +95,7 @@ enum Solver {
     Rcube,
     Gullicube,
     Competition,
+    CompetitionFastest,
 }
 
 impl Solver {
@@ -103,6 +104,7 @@ impl Solver {
             "rcube" => Ok(Self::Rcube),
             "gullicube" => Ok(Self::Gullicube),
             "competition" => Ok(Self::Competition),
+            "competition_fastest" => Ok(Self::CompetitionFastest),
             _ => Err(format!("unknown solver `{name}`")),
         }
     }
@@ -205,7 +207,8 @@ fn solve_native(
             };
             vec![run_gullicube(n, colors, control, Some(&gullicube_progress))]
         }
-        Solver::Competition => {
+        Solver::Competition | Solver::CompetitionFastest => {
+            let fastest = solver == Solver::CompetitionFastest;
             // Overall progress is the mean of both engines' progress.
             let lanes = std::sync::Arc::new(Mutex::new([0.0f64; 2]));
             let lane_progress = |lane: usize| {
@@ -227,6 +230,65 @@ fn solve_native(
                 }
             };
             let (rcube_progress, gullicube_progress) = (lane_progress(0), lane_progress(1));
+            if fastest {
+                let rcube_control = control.child();
+                let gullicube_control = control.child();
+                let (tx, rx) = std::sync::mpsc::channel();
+                let (runs, frozen_state) = std::thread::scope(|scope| {
+                    let tx_rcube = tx.clone();
+                    let rcube_worker_control = rcube_control.clone();
+                    let rcube_progress = rcube_progress.clone();
+                    let rcube = scope.spawn(move || {
+                        let run = run_rcube(n, colors, &rcube_worker_control, Some(&rcube_progress));
+                        if run.moves.is_ok() { rcube_progress(100.0); }
+                        let _ = tx_rcube.send((0usize, run));
+                    });
+                    let tx_gullicube = tx.clone();
+                    let gullicube_worker_control = gullicube_control.clone();
+                    let gullicube_progress = gullicube_progress.clone();
+                    let gullicube = scope.spawn(move || {
+                        let run = run_gullicube(n, colors, &gullicube_worker_control, Some(&gullicube_progress));
+                        if run.moves.is_ok() { gullicube_progress(100.0); }
+                        let _ = tx_gullicube.send((1usize, run));
+                    });
+                    drop(tx);
+                    let mut completed = Vec::with_capacity(2);
+                    let mut frozen_state = None;
+                    if let Ok(first) = rx.recv() {
+                        let first_succeeded = first.1.moves.is_ok();
+                        let first_index = first.0;
+                        if first_succeeded {
+                            let pct = {
+                                let values = lanes.lock().unwrap_or_else(|e| e.into_inner());
+                                values[1 - first_index]
+                            };
+                            frozen_state = Some((first_index, pct, first.1.elapsed_ms));
+                        }
+                        completed.push(first);
+                        if first_succeeded {
+                            if first_index == 0 { gullicube_control.cancel(); }
+                            else { rcube_control.cancel(); }
+                        }
+                    }
+                    if let Ok(second) = rx.recv() { completed.push(second); }
+                    let _ = rcube.join();
+                    let _ = gullicube.join();
+                    (completed, frozen_state)
+                });
+                let mut runs = runs;
+                if let Some((winner, frozen_pct, winner_elapsed)) = frozen_state {
+                    let loser_was_cancelled = if winner == 0 { !gullicube_control.should_continue() } else { !rcube_control.should_continue() };
+                    if loser_was_cancelled {
+                        for (index, run) in &mut runs {
+                            if *index != winner && run.moves.is_err() {
+                                run.moves = Err(format!("fastest_cancelled:{:.0}:{}", frozen_pct, winner_elapsed));
+                            }
+                        }
+                    }
+                }
+                runs.sort_by_key(|(index, _)| *index);
+                runs.into_iter().map(|(_, run)| run).collect()
+            } else {
             std::thread::scope(|scope| {
                 let gullicube = scope.spawn(|| {
                     let run = run_gullicube(n, colors, control, Some(&gullicube_progress));
@@ -244,6 +306,7 @@ fn solve_native(
                 });
                 vec![rcube, gullicube]
             })
+            }
         }
     };
     encode_runs(n, runs)
@@ -381,14 +444,23 @@ fn encode_runs(n: usize, runs: Vec<EngineRun>) -> Result<Vec<u8>, String> {
                 "label": run.label, "solved": true
             }),
             Err(error) => serde_json::json!({
-                "id": run.id, "pct": 0, "moveCount": 0,
-                "label": format!("{}: {error}", run.name), "solved": false
+                "id": run.id,
+                "pct": error.strip_prefix("fastest_cancelled:").and_then(|rest| rest.split(':').next()).and_then(|value| value.parse::<u32>().ok()).unwrap_or(0),
+                "moveCount": 0,
+                "label": if let Some(rest) = error.strip_prefix("fastest_cancelled:") {
+                    let mut parts = rest.split(':');
+                    let pct = parts.next().unwrap_or("0");
+                    let elapsed_ms = parts.next().and_then(|value| value.parse::<u128>().ok()).unwrap_or(run.elapsed_ms);
+                    format!("{}: stopped at {}% · elapsed {:.1}s", run.name, pct, elapsed_ms as f64 / 1000.0)
+                } else { format!("{}: {error}", run.name) },
+                "solved": false
             }),
         })
         .collect();
     let run = &runs[winner];
     let moves = run.moves.as_ref().map_err(|e| e.clone())?;
-    let elapsed_ms = if runs.len() > 1 {
+    let fastest_cancelled = runs.iter().any(|run| run.moves.as_ref().err().is_some_and(|e| e.starts_with("fastest_cancelled:")));
+    let elapsed_ms = if runs.len() > 1 && !fastest_cancelled {
         runs.iter().map(|r| r.elapsed_ms).max().unwrap_or(0)
     } else {
         run.elapsed_ms

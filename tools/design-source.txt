@@ -172,6 +172,17 @@ html.android [data-size-note]{font-size:12px!important}
 
         <!-- actions -->
         <div style="display:flex;flex-direction:column;gap:9px;">
+          <label style="display:block;margin-bottom:3px;font-size:12px;color:#6B675E;">Solver
+            <select data-solver-select style="display:block;width:100%;height:38px;margin-top:6px;border-radius:12px;border:1px solid #E4E0D6;background:#fff;padding:0 10px;font-size:13px;">
+              <option value="rcube">RCube</option>
+              <option value="gullicube">Gullicube</option>
+              <option value="competition" selected>Competition</option>
+            </select>
+          </label>
+          <div data-competition-choice style="display:flex;align-items:center;gap:14px;margin-bottom:3px;font-size:12px;color:#6B675E;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" data-competition-mode name="competition-mode" value="shortest" checked>Shortest</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="radio" data-competition-mode name="competition-mode" value="fastest">Fastest</label>
+          </div>
           <button data-act-solve onClick="{{ onSolve }}" style="height:52px;border-radius:15px;background:#161514;color:#fff;font-size:15px;font-weight:600;letter-spacing:-.01em;box-shadow:0 6px 18px -6px rgba(20,20,18,.5);transition:.16s;display:flex;align-items:center;justify-content:center;gap:9px;">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-14 9V3Z"/></svg>
             Solve
@@ -373,6 +384,11 @@ class Component extends DCLogic {
     this.dragging = false;
 
     this.cacheRefs();
+    const solverPicker = this.q('[data-solver-select]');
+    if (solverPicker) solverPicker.addEventListener('change', () => this.syncControls());
+    this.qa('[data-competition-mode]').forEach(radio => radio.addEventListener('change', () => {
+      if (radio.checked) this.competitionMode = radio.value;
+    }));
     this.syncControls();
 
     const boot = () => {
@@ -1225,6 +1241,9 @@ class Component extends DCLogic {
   syncControls() {
     const nsl = this.q('[data-nslider]'); if (nsl) nsl.value = this.nToSlider(this.n);
     const nv = this.q('[data-nval]'); if (nv) nv.textContent = `${this.n}×${this.n}`;
+    const solverPicker = this.q('[data-solver-select]');
+    const competitionChoice = this.q('[data-competition-choice]');
+    if (competitionChoice) competitionChoice.style.display = solverPicker && solverPicker.value === 'competition' ? 'flex' : 'none';
     const copy = this.q('[data-copy]');
     if (copy) {
       const notationUnavailable = this.n > 21;

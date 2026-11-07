@@ -72,6 +72,7 @@ use web_time::Instant;
 pub struct ReductionControl {
     deadline: Option<Instant>,
     cancelled: Arc<AtomicBool>,
+    parent_cancelled: Option<Arc<AtomicBool>>,
 }
 
 impl ReductionControl {
@@ -79,6 +80,7 @@ impl ReductionControl {
         Self {
             deadline: None,
             cancelled: Arc::new(AtomicBool::new(false)),
+            parent_cancelled: None,
         }
     }
 
@@ -86,6 +88,7 @@ impl ReductionControl {
         Self {
             deadline: Some(Instant::now() + timeout),
             cancelled: Arc::new(AtomicBool::new(false)),
+            parent_cancelled: None,
         }
     }
 
@@ -93,8 +96,19 @@ impl ReductionControl {
         self.cancelled.store(true, Ordering::Relaxed);
     }
 
+    /// Create an independently cancellable child that also observes this
+    /// control's cancellation. Used when racing cooperative solver workers.
+    pub fn child(&self) -> Self {
+        Self {
+            deadline: self.deadline,
+            cancelled: Arc::new(AtomicBool::new(false)),
+            parent_cancelled: Some(self.cancelled.clone()),
+        }
+    }
+
     pub fn should_continue(&self) -> bool {
         !self.cancelled.load(Ordering::Relaxed)
+            && !self.parent_cancelled.as_ref().is_some_and(|cancelled| cancelled.load(Ordering::Relaxed))
             && self
                 .deadline
                 .is_none_or(|deadline| Instant::now() < deadline)
