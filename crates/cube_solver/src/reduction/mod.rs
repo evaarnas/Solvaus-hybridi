@@ -108,7 +108,10 @@ impl ReductionControl {
 
     pub fn should_continue(&self) -> bool {
         !self.cancelled.load(Ordering::Relaxed)
-            && !self.parent_cancelled.as_ref().is_some_and(|cancelled| cancelled.load(Ordering::Relaxed))
+            && !self
+                .parent_cancelled
+                .as_ref()
+                .is_some_and(|cancelled| cancelled.load(Ordering::Relaxed))
             && self
                 .deadline
                 .is_none_or(|deadline| Instant::now() < deadline)

@@ -239,16 +239,26 @@ fn solve_native(
                     let rcube_worker_control = rcube_control.clone();
                     let rcube_progress = rcube_progress.clone();
                     let rcube = scope.spawn(move || {
-                        let run = run_rcube(n, colors, &rcube_worker_control, Some(&rcube_progress));
-                        if run.moves.is_ok() { rcube_progress(100.0); }
+                        let run =
+                            run_rcube(n, colors, &rcube_worker_control, Some(&rcube_progress));
+                        if run.moves.is_ok() {
+                            rcube_progress(100.0);
+                        }
                         let _ = tx_rcube.send((0usize, run));
                     });
                     let tx_gullicube = tx.clone();
                     let gullicube_worker_control = gullicube_control.clone();
                     let gullicube_progress = gullicube_progress.clone();
                     let gullicube = scope.spawn(move || {
-                        let run = run_gullicube(n, colors, &gullicube_worker_control, Some(&gullicube_progress));
-                        if run.moves.is_ok() { gullicube_progress(100.0); }
+                        let run = run_gullicube(
+                            n,
+                            colors,
+                            &gullicube_worker_control,
+                            Some(&gullicube_progress),
+                        );
+                        if run.moves.is_ok() {
+                            gullicube_progress(100.0);
+                        }
                         let _ = tx_gullicube.send((1usize, run));
                     });
                     drop(tx);
@@ -266,22 +276,34 @@ fn solve_native(
                         }
                         completed.push(first);
                         if first_succeeded {
-                            if first_index == 0 { gullicube_control.cancel(); }
-                            else { rcube_control.cancel(); }
+                            if first_index == 0 {
+                                gullicube_control.cancel();
+                            } else {
+                                rcube_control.cancel();
+                            }
                         }
                     }
-                    if let Ok(second) = rx.recv() { completed.push(second); }
+                    if let Ok(second) = rx.recv() {
+                        completed.push(second);
+                    }
                     let _ = rcube.join();
                     let _ = gullicube.join();
                     (completed, frozen_state)
                 });
                 let mut runs = runs;
                 if let Some((winner, frozen_pct, winner_elapsed)) = frozen_state {
-                    let loser_was_cancelled = if winner == 0 { !gullicube_control.should_continue() } else { !rcube_control.should_continue() };
+                    let loser_was_cancelled = if winner == 0 {
+                        !gullicube_control.should_continue()
+                    } else {
+                        !rcube_control.should_continue()
+                    };
                     if loser_was_cancelled {
                         for (index, run) in &mut runs {
                             if *index != winner && run.moves.is_err() {
-                                run.moves = Err(format!("fastest_cancelled:{:.0}:{}", frozen_pct, winner_elapsed));
+                                run.moves = Err(format!(
+                                    "fastest_cancelled:{:.0}:{}",
+                                    frozen_pct, winner_elapsed
+                                ));
                             }
                         }
                     }
@@ -289,23 +311,23 @@ fn solve_native(
                 runs.sort_by_key(|(index, _)| *index);
                 runs.into_iter().map(|(_, run)| run).collect()
             } else {
-            std::thread::scope(|scope| {
-                let gullicube = scope.spawn(|| {
-                    let run = run_gullicube(n, colors, control, Some(&gullicube_progress));
-                    gullicube_progress(100.0);
-                    run
-                });
-                let rcube = run_rcube(n, colors, control, Some(&rcube_progress));
-                rcube_progress(100.0);
-                let gullicube = gullicube.join().unwrap_or_else(|_| EngineRun {
-                    id: "gullicube",
-                    name: "Gullicube",
-                    label: "Gullicube beam-search reduction",
-                    moves: Err("Gullicube thread panicked".to_string()),
-                    elapsed_ms: 0,
-                });
-                vec![rcube, gullicube]
-            })
+                std::thread::scope(|scope| {
+                    let gullicube = scope.spawn(|| {
+                        let run = run_gullicube(n, colors, control, Some(&gullicube_progress));
+                        gullicube_progress(100.0);
+                        run
+                    });
+                    let rcube = run_rcube(n, colors, control, Some(&rcube_progress));
+                    rcube_progress(100.0);
+                    let gullicube = gullicube.join().unwrap_or_else(|_| EngineRun {
+                        id: "gullicube",
+                        name: "Gullicube",
+                        label: "Gullicube beam-search reduction",
+                        moves: Err("Gullicube thread panicked".to_string()),
+                        elapsed_ms: 0,
+                    });
+                    vec![rcube, gullicube]
+                })
             }
         }
     };
@@ -459,7 +481,12 @@ fn encode_runs(n: usize, runs: Vec<EngineRun>) -> Result<Vec<u8>, String> {
         .collect();
     let run = &runs[winner];
     let moves = run.moves.as_ref().map_err(|e| e.clone())?;
-    let fastest_cancelled = runs.iter().any(|run| run.moves.as_ref().err().is_some_and(|e| e.starts_with("fastest_cancelled:")));
+    let fastest_cancelled = runs.iter().any(|run| {
+        run.moves
+            .as_ref()
+            .err()
+            .is_some_and(|e| e.starts_with("fastest_cancelled:"))
+    });
     let elapsed_ms = if runs.len() > 1 && !fastest_cancelled {
         runs.iter().map(|r| r.elapsed_ms).max().unwrap_or(0)
     } else {
