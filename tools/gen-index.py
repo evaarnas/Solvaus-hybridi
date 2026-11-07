@@ -638,6 +638,11 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       };
     }
     function currentSolver(self){ var s=self.root.querySelector('[data-solver-select]'); return s&&s.value||'rcube'; }
+    function selectedNativeSolver(self){
+      if (currentSolver(self)!=='competition') return currentSolver(self);
+      var selected=self.root.querySelector('[data-competition-mode]:checked');
+      return selected&&selected.value==='fastest'?'competition_fastest':'competition';
+    }
     function postNativeSolve(self){
       var core = nativeCore();
       if (!core || !self._solvePending || self._solveDispatch) return false;
@@ -659,7 +664,7 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         updateNativeSolveProgress(self, requestToken, payload);
       };
       core.invoke('solve_stickers', {
-        requestToken:requestToken, n:self.n, colors:colors, solver:currentSolver(self), onProgress:progressChannel
+        requestToken:requestToken, n:self.n, colors:colors, solver:selectedNativeSolver(self), onProgress:progressChannel
       }).then(function(result){
         onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:decodeNativeSolveResult(result) });
       }).catch(function(error){
@@ -1247,6 +1252,8 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       var solverSel = self.root.querySelector('[data-solver-select]');
       if (solverSel && solverSel._wrap) solverSel._wrap.style.display = nativeRcube ? '' : 'none';
       var pick = nativeRcube && solverSel ? solverSel.value : 'rcube';
+      var compMode = self.root.querySelector('[data-competition-choice]');
+      if (compMode) compMode.style.display = nativeRcube && pick === 'competition' ? 'flex' : 'none';
       var showDet = !(nativeRcube && pick === 'gullicube');
       var showBeam = nativeRcube && pick !== 'rcube';
       // Hide non-running lanes whenever a dedicated complete solver owns the size.
@@ -1342,12 +1349,21 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         wrap.appendChild(document.createTextNode('Solver '));
         var sel = document.createElement('select'); sel.setAttribute('data-solver-select','');
         sel.style.cssText = 'width:100%;height:38px;margin-top:6px;border-radius:12px;border:1px solid #E4E0D6;background:#fff;padding:0 10px;font-size:13px;';
-        [['rcube','RCube'],['gullicube','Gullicube'],['competition','Competition (both, shortest wins)']].forEach(function(o){
+        [['rcube','RCube'],['gullicube','Gullicube'],['competition','Competition']].forEach(function(o){
           var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op);
         });
         sel.value = 'competition';
         wrap.appendChild(sel); sel._wrap = wrap;
         sel.addEventListener('change', function(){ if (self.resetLanes && !self.busy && !self._solvePending) self.resetLanes(); applyEngineLabels(self); });
+        var choice=document.createElement('div'); choice.setAttribute('data-competition-choice','');
+        choice.style.cssText='display:none;align-items:center;gap:14px;margin-top:9px;';
+        [['shortest','Shortest'],['fastest','Fastest']].forEach(function(option,index){
+          var label=document.createElement('label'); label.style.cssText='display:flex;align-items:center;gap:5px;cursor:pointer;';
+          var radio=document.createElement('input'); radio.type='radio'; radio.name='competition-mode'; radio.value=option[0]; radio.setAttribute('data-competition-mode',''); radio.checked=index===0;
+          radio.addEventListener('change',function(){ if(self.resetLanes&&!self.busy&&!self._solvePending)self.resetLanes(); applyEngineLabels(self); });
+          label.appendChild(radio); label.appendChild(document.createTextNode(option[1])); choice.appendChild(label);
+        });
+        wrap.appendChild(choice);
         solveBtn.parentNode.insertBefore(wrap, solveBtn);
         var tc = nativeCore();
         if (tc && tc.invoke) tc.invoke('available_solvers').then(function(a){
