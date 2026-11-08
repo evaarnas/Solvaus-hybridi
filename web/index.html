@@ -359,6 +359,7 @@ class Component extends DCLogic {
     // config
     this.n = 3;
     this.CUBIE_MAX = 21;
+    this.RENDER_CUBIE_MAX = 21;
     this.scrambleDepth = 20;
     this.speedDur = 0.52;
     this.view = 'studio';
@@ -563,30 +564,21 @@ class Component extends DCLogic {
     const step = total / N;
     const cubie = step * 0.95;
     this.step = step; this.half = (N - 1) / 2;
-    // A rounded-box core fills the center without extending into the shell cubies.
-    // Its size comes from the actual inner clearance left by those cubies.
-    const coreClearance = (total - step - cubie) * 0.5;
-    const coreSize = Math.max(0, 2 * (coreClearance - step * 0.01));
-    const coreHalf = coreSize * 0.5, coreRadius = coreSize * 0.18;
-    const coreGeo = new T.BoxGeometry(coreSize, coreSize, coreSize, 8, 8, 8);
-    const corePositions = coreGeo.attributes.position;
-    const coreNormals = new Float32Array(corePositions.count * 3);
-    for (let i = 0; i < corePositions.count; i++) {
-      const x = corePositions.getX(i), y = corePositions.getY(i), z = corePositions.getZ(i);
-      const cx = Math.max(-coreHalf + coreRadius, Math.min(coreHalf - coreRadius, x));
-      const cy = Math.max(-coreHalf + coreRadius, Math.min(coreHalf - coreRadius, y));
-      const cz = Math.max(-coreHalf + coreRadius, Math.min(coreHalf - coreRadius, z));
-      let nx = x - cx, ny = y - cy, nz = z - cz;
-      const length = Math.hypot(nx, ny, nz);
-      nx /= length; ny /= length; nz /= length;
-      corePositions.setXYZ(i, cx + nx * coreRadius, cy + ny * coreRadius, cz + nz * coreRadius);
-      coreNormals.set([nx, ny, nz], i * 3);
+    let core = null;
+    if (N === 3) {
+      core = new T.Mesh(new T.SphereGeometry(total * 0.475, 32, 24), this.bodyMat);
+    } else if (N >= 4) {
+      // Keep the larger cube core just inside the shell cubies' inner clearance,
+      // leaving a small fraction of the inter-cubie gap for animated turns.
+      const coreClearance = (total - step - cubie) * 0.5;
+      const turnTolerance = (step - cubie) * 0.1;
+      const coreSize = Math.max(0, 2 * (coreClearance - turnTolerance));
+      if (coreSize > 0) core = new T.Mesh(new T.BoxGeometry(coreSize, coreSize, coreSize), this.bodyMat);
     }
-    coreGeo.setAttribute('normal', new T.Float32BufferAttribute(coreNormals, 3));
-    coreGeo.computeBoundingSphere();
-    const core = new T.Mesh(coreGeo, this.bodyMat);
-    core.castShadow = false; core.receiveShadow = false;
-    this.cubeGroup.add(core); this.core = core;
+    if (core) {
+      core.castShadow = false; core.receiveShadow = false;
+      this.cubeGroup.add(core); this.core = core;
+    }
     const bodyGeo = new T.BoxGeometry(cubie, cubie, cubie);
     const stGeo = new T.PlaneGeometry(cubie * 0.84, cubie * 0.84);
     const eps = cubie * 0.5 + step * 0.012;
@@ -1318,7 +1310,17 @@ class Component extends DCLogic {
         }
         else this.updateHUD();
       } else if (this.queue.length) {
-        this.startMove(this.queue.shift());
+        if (this.n > 5) {
+          const batchSize = Math.min(24, Math.max(8, Math.ceil(this.totalMoves / 840)));
+          let batch = batchSize;
+          while (batch-- > 0 && this.queue.length) {
+            this.applyInstant(this.queue.shift());
+            this.movesDone++;
+          }
+          this.updateHUD();
+        } else {
+          this.startMove(this.queue.shift());
+        }
       } else if (this.busy) {
         this.onPhaseComplete();
       }
