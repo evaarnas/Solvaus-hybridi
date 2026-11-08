@@ -564,25 +564,21 @@ jobs:
           import pathlib, shutil, zipfile, os
           apk_root = pathlib.Path('src-tauri/gen/android/app/build/outputs/apk')
           apks = list(apk_root.rglob('*.apk'))
-          if len(apks) != 2:
-              raise SystemExit(f'expected two ABI APKs, found {len(apks)}: {apks}')
-          found = set()
+          if len(apks) != 1:
+              raise SystemExit(f'expected one universal APK, found {len(apks)}: {apks}')
           out = pathlib.Path('dist'); out.mkdir(exist_ok=True)
-          for apk in apks:
-              with zipfile.ZipFile(apk) as archive:
-                  names = archive.namelist()
-              if any(name.startswith('lib/arm64-v8a/') for name in names):
-                  abi = 'arm64'
-              elif any(name.startswith('lib/armeabi-v7a/') for name in names):
-                  abi = 'armv7'
-              else:
-                  raise SystemExit(f'APK contains no expected native ABI: {apk}')
-              if abi in found:
-                  raise SystemExit(f'duplicate {abi} APK')
-              found.add(abi)
-              shutil.copy2(apk, out / f"Solvaus-{os.environ['RELEASE_TAG']}-android-{abi}-debug-signed.apk")
+          apk = apks[0]
+          with zipfile.ZipFile(apk) as archive:
+              names = archive.namelist()
+          found = {
+              abi for abi, prefix in (
+                  ('arm64', 'lib/arm64-v8a/'),
+                  ('armv7', 'lib/armeabi-v7a/'),
+              ) if any(name.startswith(prefix) for name in names)
+          }
           if found != {'arm64', 'armv7'}:
-              raise SystemExit(f'missing Android ABI APK: {found}')
+              raise SystemExit(f'universal APK must contain arm64 and armv7 native libraries; found {sorted(found)}')
+          shutil.copy2(apk, out / f"Solvaus-{os.environ['RELEASE_TAG']}-android-universal-debug-signed.apk")
           PY
           version_code="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["bundle"]["android"]["versionCode"])')"
           for apk in dist/*.apk; do
@@ -655,8 +651,7 @@ jobs:
               f'Solvaus-{tag}-linux-x86_64.flatpak',
               f'Solvaus-{tag}-macos-universal.dmg',
               f'Solvaus-{tag}-windows-x86_64-setup.exe',
-              f'Solvaus-{tag}-android-arm64-debug-signed.apk',
-              f'Solvaus-{tag}-android-armv7-debug-signed.apk',
+              f'Solvaus-{tag}-android-universal-debug-signed.apk',
           }
           expected_metadata = {
               'build-metadata-release-linux-x86_64.json': 'x86_64-unknown-linux-gnu',

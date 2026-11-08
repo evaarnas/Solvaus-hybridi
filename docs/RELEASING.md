@@ -42,14 +42,13 @@ Once published, assets are immutable under this policy. Any later signed build u
 
 ## Artifact contract
 
-A complete draft contains exactly these five packages:
+A complete draft contains exactly these four packages:
 
 ```text
 Solvaus-vX.Y.Z-linux-x86_64.flatpak
 Solvaus-vX.Y.Z-macos-universal.dmg
 Solvaus-vX.Y.Z-windows-x86_64-setup.exe
-Solvaus-vX.Y.Z-android-arm64-debug-signed.apk
-Solvaus-vX.Y.Z-android-armv7-debug-signed.apk
+Solvaus-vX.Y.Z-android-universal-debug-signed.apk
 ```
 
 The Android APKs are signed with the stable CI debug key for sideloading. They are not Play Store releases and will not update an installation signed with a Play Store or locally managed production key. Production Android signing is not configured.
@@ -74,7 +73,7 @@ The assembly job rejects missing, duplicate, empty, symlinked, or unexpected pac
 - package version matches the requested tag,
 - the packaged process remains alive during a startup smoke.
 
-The Android job verifies both ABI APKs, the package version and version code, and the debug signing certificate. It does not publish an Android App Bundle.
+The Android job verifies the universal APK contains arm64 and armv7 native libraries, along with its package version, version code, and debug signing certificate. It does not publish an Android App Bundle.
 
 ### Linux
 
@@ -106,7 +105,7 @@ A single-file Flatpak contains the application, not the GNOME runtime. Its embed
 
 ### Android
 
-- install the arm64 APK on a 64-bit device and the armv7 APK on a compatible 32-bit device,
+- install the universal APK on a 64-bit device and a compatible 32-bit device,
 - verify version name/code and the debug-signing certificate,
 - launch and solve a small cube; treat these as sideload builds only.
 

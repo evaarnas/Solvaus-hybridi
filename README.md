@@ -245,12 +245,12 @@ Avoid keeping active build trees in a cloud-synchronized folder. Sync tools can 
 
 ## Releases
 
-The release workflow produces three native desktop downloads and two Android sideload APKs:
+The release workflow produces three native desktop downloads and one Android sideload APK:
 
 - Windows x86_64: NSIS setup `.exe`,
 - macOS universal: `.dmg`,
 - Linux x86_64: `.flatpak` bundle using the GNOME 50 runtime.
-- Android arm64 and armv7: debug-signed APKs for sideloading (not Play Store builds).
+- Android universal: debug-signed APK with arm64 and armv7 support (not a Play Store build).
 
 The `v0.1.0` desktop packages were published **unsigned** by explicit owner decision. Apple notarization and Windows publisher signing are not configured, so Gatekeeper and SmartScreen warnings are expected. Android APKs in draft releases are signed with a debug key for sideloading, not for Play Store distribution. The Flatpak is a single-file application bundle; Flatpak downloads its declared GNOME runtime from Flathub when needed.
 
