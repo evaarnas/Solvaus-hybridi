@@ -475,7 +475,7 @@ jobs:
       contents: read
     env:
       VERSION: ${{ needs.verify-source.outputs.version }}
-      NDK_VERSION: "27.0.12077973"
+      NDK_VERSION: "28.2.13676358"
     steps:
       - name: Check out source
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -501,7 +501,7 @@ jobs:
         shell: bash
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" "platforms;android-34" "build-tools;34.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" "platforms;android-36" "build-tools;36.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
@@ -583,10 +583,10 @@ jobs:
           version_code="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["bundle"]["android"]["versionCode"])')"
           for apk in dist/*.apk; do
             cert="$RUNNER_TEMP/apk-cert.txt"
-            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk" > "$cert"
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$apk" > "$cert"
             grep -F 'CN=Android Debug' "$cert"
-            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" | grep -F "versionName='$VERSION'"
-            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" | grep -F "versionCode='$version_code'"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "versionName='$VERSION'"
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" | grep -F "versionCode='$version_code'"
           done
 
       - name: Write Android build metadata

@@ -14,10 +14,47 @@ PROPERTIES = ANDROID / "app" / "tauri.properties"
 BUILD_SRC_GRADLE = ANDROID / "buildSrc" / "build.gradle.kts"
 BUILD_TASK = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "BuildTask.kt"
 RUST_PLUGIN = ANDROID / "buildSrc" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "kotlin" / "RustPlugin.kt"
+MAIN_ACTIVITY = ANDROID / "app" / "src" / "main" / "java" / "com" / "gmail" / "solvaus" / "hybridi" / "MainActivity.kt"
+APP_GRADLE = ANDROID / "app" / "build.gradle.kts"
+ROOT_GRADLE = ANDROID / "build.gradle.kts"
 CONFIG = ROOT / "src-tauri" / "tauri.conf.json"
-ACTIVITY = '            android:name=".MainActivity"'
-ORIENTATION = '            android:screenOrientation="portrait"'
 BUILD_TASK_PACKAGE = "package com.gmail.solvaus.hybridi.kotlin"
+
+MAIN_ACTIVITY_SOURCE = '''package com.gmail.solvaus.hybridi
+
+import android.os.Bundle
+import android.view.View
+import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    WindowCompat.enableEdgeToEdge(window)
+    super.onCreate(savedInstanceState)
+
+    val content = findViewById<View>(android.R.id.content)
+    val initialPadding = intArrayOf(
+      content.paddingLeft, content.paddingTop, content.paddingRight, content.paddingBottom,
+    )
+    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+      val safe = insets.getInsets(
+        WindowInsetsCompat.Type.systemBars() or
+          WindowInsetsCompat.Type.displayCutout() or
+          WindowInsetsCompat.Type.ime(),
+      )
+      view.setPadding(
+        initialPadding[0] + safe.left,
+        initialPadding[1] + safe.top,
+        initialPadding[2] + safe.right,
+        initialPadding[3] + safe.bottom,
+      )
+      WindowInsetsCompat.CONSUMED
+    }
+    ViewCompat.requestApplyInsets(content)
+  }
+}
+'''
 
 
 def fix_build_task_package() -> None:
@@ -182,22 +219,51 @@ def sync_version() -> None:
     print(f"Synced Android versionName={version_name}, versionCode={version_code}")
 
 
-def main() -> int:
+def configure_display() -> None:
     if not MANIFEST.is_file():
         raise SystemExit(f"Generated Android manifest not found: {MANIFEST}")
+    manifest = MANIFEST.read_text(encoding="utf-8")
+    manifest = re.sub(r'(?m)^[ \t]*android:screenOrientation="[^"]+"[ \t]*\r?\n', "", manifest)
+    manifest = re.sub(r'(?m)^[ \t]*android:resizeableActivity="false"[ \t]*\r?\n', "", manifest)
+    MANIFEST.write_text(manifest, encoding="utf-8", newline="\n")
 
+    if not APP_GRADLE.is_file():
+        raise SystemExit(f"Generated Android application Gradle file not found: {APP_GRADLE}")
+    gradle = APP_GRADLE.read_text(encoding="utf-8")
+    activity_dependency = re.compile(r'androidx\.activity:activity-ktx:[^"\)]+')
+    gradle, replaced = activity_dependency.subn("androidx.activity:activity-ktx:1.13.0", gradle)
+    if replaced != 1:
+        raise SystemExit(f"Could not update the AndroidX Activity dependency in {APP_GRADLE}")
+    if 'androidx.core:core-ktx:1.17.0' not in gradle:
+        if gradle.count('dependencies {') != 1:
+            raise SystemExit(f"Could not find the application dependency block in {APP_GRADLE}")
+        gradle = gradle.replace(
+            'dependencies {',
+            'dependencies {\n    implementation("androidx.core:core-ktx:1.17.0")',
+            1,
+        )
+    APP_GRADLE.write_text(gradle, encoding="utf-8", newline="\n")
+
+    if not ROOT_GRADLE.is_file():
+        raise SystemExit(f"Generated Android root Gradle file not found: {ROOT_GRADLE}")
+    root_gradle = ROOT_GRADLE.read_text(encoding="utf-8")
+    kotlin_plugin = re.compile(r'org\.jetbrains\.kotlin:kotlin-gradle-plugin:[^"\)]+')
+    root_gradle, replaced = kotlin_plugin.subn(
+        "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21", root_gradle
+    )
+    if replaced != 1:
+        raise SystemExit(f"Could not update the Kotlin Gradle plugin in {ROOT_GRADLE}")
+    ROOT_GRADLE.write_text(root_gradle, encoding="utf-8", newline="\n")
+
+    MAIN_ACTIVITY.parent.mkdir(parents=True, exist_ok=True)
+    MAIN_ACTIVITY.write_text(MAIN_ACTIVITY_SOURCE, encoding="utf-8", newline="\n")
+
+
+def main() -> int:
     fix_build_task_package()
     sync_version()
-    source = MANIFEST.read_text(encoding="utf-8")
-    if ORIENTATION in source:
-        print("Android MainActivity is already locked to portrait")
-        return 0
-
-    if source.count(ACTIVITY) != 1:
-        raise SystemExit("Could not identify exactly one generated MainActivity declaration")
-
-    MANIFEST.write_text(source.replace(ACTIVITY, ORIENTATION + "\n" + ACTIVITY, 1), encoding="utf-8", newline="\n")
-    print("Locked Android MainActivity to portrait")
+    configure_display()
+    print("Configured edge-to-edge insets and unrestricted Android orientation/resizing")
     return 0
 
 
