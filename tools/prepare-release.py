@@ -8,6 +8,8 @@ import datetime as dt
 import json
 import re
 import subprocess
+import tomllib
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -21,8 +23,10 @@ def parse_version(value: str) -> tuple[int, int, int]:
     return tuple(map(int, match.groups()))
 
 
-def replace_once(path: Path, pattern: str, replacement: str) -> None:
+def replace_once(path: Path, pattern: str, replacement: str, already_applied: str | None = None) -> None:
     source = path.read_text(encoding="utf-8")
+    if already_applied and already_applied in source:
+        return
     updated, count = re.subn(pattern, replacement, source, count=1, flags=re.MULTILINE)
     if count != 1:
         raise SystemExit(f"expected one version field in {path.relative_to(ROOT)}")
@@ -39,14 +43,35 @@ def automatic_notes(target: tuple[int, int, int]) -> list[str]:
                 previous.append((version, path))
     if not previous:
         raise SystemExit("cannot find previous release notes; supply --note bullets")
-    _, previous_notes = max(previous)
-    anchor = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", str(previous_notes.relative_to(ROOT))],
+    previous_version, previous_notes = max(previous)
+    previous_tag = "v" + ".".join(map(str, previous_version))
+    tag_result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/tags/{previous_tag}^{{commit}}"],
         cwd=ROOT,
-        check=True,
         capture_output=True,
         text=True,
-    ).stdout.strip()
+    )
+    if tag_result.returncode == 0:
+        anchor = tag_result.stdout.strip()
+    else:
+        # The notes file can be edited after its release-prep commit (for example,
+        # when adding an asset to the pending draft). Anchor at its creation so
+        # those later commits are still included in the next draft's notes.
+        anchor = subprocess.run(
+            ["git", "log", "-1", "--diff-filter=A", "--format=%H", "--", str(previous_notes.relative_to(ROOT))],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if not anchor:
+            anchor = subprocess.run(
+                ["git", "log", "-1", "--format=%H", "--", str(previous_notes.relative_to(ROOT))],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
     if not anchor:
         raise SystemExit("previous release notes are not committed; supply --note bullets")
     history = subprocess.run(
@@ -61,6 +86,33 @@ def automatic_notes(target: tuple[int, int, int]) -> list[str]:
     if not notes:
         raise SystemExit("no commits since the previous release notes; supply --note bullets")
     return notes
+
+
+def release_is_current(version: str, version_code: int, tag: str, notes: Path) -> bool:
+    try:
+        workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+        desktop = tomllib.loads((ROOT / "src-tauri" / "Cargo.toml").read_text(encoding="utf-8"))
+        config = json.loads((ROOT / "src-tauri" / "tauri.conf.json").read_text(encoding="utf-8"))
+        releases = ET.parse(ROOT / "packaging" / "flatpak" / "io.github.adamnolle.cubesolver.metainfo.xml").getroot().find("./releases")
+        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        if workspace["workspace"]["package"]["version"] != version or desktop["package"]["version"] != version:
+            return False
+        if config["version"] != version or config["bundle"]["android"]["versionCode"] != version_code:
+            return False
+        if releases is None or len(releases) == 0 or releases[0].get("version") != version:
+            return False
+        if f"        default: {tag}" not in workflow or f"tag must look like {tag}" not in workflow:
+            return False
+        if not notes.is_file():
+            return False
+        local_names = {"cube_core", "cube_solver", "cube_wasm", "solver_lab_app", "solver_store", "cube-solver"}
+        for lock_path in (ROOT / "Cargo.lock", ROOT / "src-tauri" / "Cargo.lock"):
+            lock = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+            if any(package["version"] != version for package in lock["package"] if package["name"] in local_names):
+                return False
+        return True
+    except (OSError, KeyError, IndexError, ET.ParseError, tomllib.TOMLDecodeError, json.JSONDecodeError):
+        return False
 
 
 def main() -> None:
@@ -86,13 +138,15 @@ def main() -> None:
     if not current_match:
         raise SystemExit("could not find [workspace.package] version in Cargo.toml")
     current = parse_version(current_match.group(1))
-    if args.version <= current:
+    if args.version < current:
         raise SystemExit(f"new version {version} must be greater than current {current_match.group(1)}")
-    notes_content = args.note or automatic_notes(args.version)
-
     notes = ROOT / "docs" / f"release-notes-{tag}.md"
-    if notes.exists():
+    if current == args.version and release_is_current(version, version_code, tag, notes):
+        print(f"{tag} is already prepared; no files changed.")
+        return
+    if notes.exists() and args.version > current:
         raise SystemExit(f"release notes already exist: {notes.relative_to(ROOT)}")
+    notes_content = args.note or (automatic_notes(args.version) if not notes.exists() else [])
     existing_tag = subprocess.run(
         ["git", "tag", "--list", tag], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip()
@@ -113,19 +167,17 @@ def main() -> None:
         metainfo,
         r"^(\s*<releases>\s*)$",
         f'\\1\n    <release version="{version}" date="{args.date}"/>',
+        f'<release version="{version}"',
     )
     workflow = ROOT / ".github" / "workflows" / "release.yml"
     replace_once(workflow, r"^        default: v\d+\.\d+\.\d+$", f"        default: {tag}")
     replace_once(workflow, r"tag must look like v\d+\.\d+\.\d+", f"tag must look like {tag}")
-    guide = ROOT / "docs" / "RELEASING.md"
-    replace_once(guide, r"for example `v\d+\.\d+\.\d+`", f"for example `{tag}`")
-    replace_once(guide, r"such as `v\d+\.\d+\.\d+`", f"such as `{tag}`")
-
-    notes.write_text(
-        f"# Solvaus {tag}\n\n" + "".join(f"- {note.strip()}\n" for note in notes_content),
-        encoding="utf-8",
-        newline="",
-    )
+    if not notes.exists():
+        notes.write_text(
+            f"# Solvaus {tag}\n\n" + "".join(f"- {note.strip()}\n" for note in notes_content),
+            encoding="utf-8",
+            newline="",
+        )
     subprocess.run(["cargo", "update", "--workspace"], cwd=ROOT, check=True)
     subprocess.run(
         ["cargo", "update", "--workspace", "--manifest-path", "src-tauri/Cargo.toml"],

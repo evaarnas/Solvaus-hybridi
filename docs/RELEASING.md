@@ -21,7 +21,7 @@ The command updates Cargo and Tauri versions, lockfiles, Flatpak metadata, and t
 
 1. Ensure `main` is clean, pushed, and green in both **CI** and **Desktop app** workflows.
 2. Open **Actions → Draft release → Run workflow**.
-3. Enter the matching tag, such as `v0.2.15`.
+3. Enter the matching tag shown by the release-preparation command (for example, `vX.Y.Z`).
 4. Leave `replace_existing_draft` disabled for the first run.
 5. Wait for all matrix and assembly jobs to pass.
 6. Inspect the resulting draft release; do not publish it.
