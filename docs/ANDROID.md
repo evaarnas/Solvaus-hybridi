@@ -11,8 +11,10 @@ The desktop Tauri shell also builds for Android (Tauri 2 mobile). The WebView lo
   available on arm64 phones but shows as "not installed" in the 32-bit armv7 build. It can need about
   3 GB of RAM, so on phones only small and medium cubes are likely to finish; Android may stop the
   process on larger ones.
-- **Build in CI:** the `Android app` workflow produces a debug-signed APK (arm64 + armv7) that can be
-  sideloaded (`adb install` or opening the file on the phone).
+- **Build in CI:** the `Android app` workflow produces debug-signed APKs (arm64 + armv7) that can be
+  sideloaded (`adb install` or opening the file on the phone). Draft releases now include both APKs.
+  They are not Play Store releases; installations signed by a Play Store or production keystore cannot
+  be updated with these debug-key APKs.
 - **Build locally:** install JDK 17, the Android SDK and NDK (set `ANDROID_HOME` and `NDK_HOME`), add
   the Rust targets `aarch64-linux-android armv7-linux-androideabi`, then from `src-tauri/`:
 

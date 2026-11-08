@@ -1,11 +1,11 @@
 # Release guide
 
-Cube Solver uses a validate-first release policy:
+Cube Solver uses a validate-first release policy. Desktop packages are unsigned until production signing is configured; Android draft APKs use the CI debug key and are for sideloading only.
 
 1. **Build an unsigned draft** on GitHub-hosted Linux, macOS, and Windows runners.
 2. **Prefer trusted platform signing before publication.** An explicit repository-owner decision may publish an unsigned build only when the title and notes clearly warn users.
 
-This distinction matters. A checksum proves that a download was not corrupted after the workflow produced it. It does not prove a trusted publisher identity to Gatekeeper or SmartScreen. The public `v0.1.0` release is an explicitly approved unsigned exception.
+This distinction matters. A checksum proves that a download was not corrupted after the workflow produced it. It does not prove a trusted publisher identity to Gatekeeper or SmartScreen. The public `v0.1.0` desktop release is an explicitly approved unsigned exception.
 
 ## Version contract
 
@@ -34,7 +34,7 @@ Publishing an unsigned draft requires explicit repository-owner approval. Before
 
 - change the title and notes to say **unsigned public release**,
 - set the manifest publication state to `published-unsigned`,
-- retain `signed: false` and `notarized: false`,
+- retain `publisher_signed: false` and `notarized: false`, and keep the Android debug-key disclosure,
 - verify package hashes and provenance again,
 - never imply that Gatekeeper or SmartScreen will trust the packages.
 
@@ -42,13 +42,17 @@ Once published, assets are immutable under this policy. Any later signed build u
 
 ## Artifact contract
 
-A complete draft contains exactly these three packages:
+A complete draft contains exactly these five packages:
 
 ```text
 Solvaus-vX.Y.Z-linux-x86_64.flatpak
 Solvaus-vX.Y.Z-macos-universal.dmg
 Solvaus-vX.Y.Z-windows-x86_64-setup.exe
+Solvaus-vX.Y.Z-android-arm64-debug-signed.apk
+Solvaus-vX.Y.Z-android-armv7-debug-signed.apk
 ```
+
+The Android APKs are signed with the stable CI debug key for sideloading. They are not Play Store releases and will not update an installation signed with a Play Store or locally managed production key. Production Android signing is not configured.
 
 It also includes:
 
@@ -69,6 +73,8 @@ The assembly job rejects missing, duplicate, empty, symlinked, or unexpected pac
 - packaged/generated WASM executes a real reduction solve and independently replays,
 - package version matches the requested tag,
 - the packaged process remains alive during a startup smoke.
+
+The Android job verifies both ABI APKs, the package version and version code, and the debug signing certificate. It does not publish an Android App Bundle.
 
 ### Linux
 
@@ -97,6 +103,12 @@ A single-file Flatpak contains the application, not the GNOME runtime. Its embed
 - installer can be inspected by 7-Zip,
 - silent installation contains an x86_64 `cube-solver.exe` with the expected version,
 - installed application startup.
+
+### Android
+
+- install the arm64 APK on a 64-bit device and the armv7 APK on a compatible 32-bit device,
+- verify version name/code and the debug-signing certificate,
+- launch and solve a small cube; treat these as sideload builds only.
 
 ## Signing requirements
 
@@ -134,7 +146,7 @@ Use SHA-256 and a trusted timestamp server. Never silently fall back to unsigned
 
 After signing credentials are available, while the release is still a draft:
 
-1. Add fail-closed macOS notarization and Windows Authenticode steps to the release workflow, guarded by a protected release environment.
+1. Add fail-closed macOS notarization, Windows Authenticode, and Android production-keystore signing steps to the release workflow, guarded by a protected release environment.
 2. Require the workflow to reject missing or invalid signatures rather than falling back to unsigned output.
 3. Run the updated draft workflow with `replace_existing_draft=true`.
 4. Confirm every replacement package is signed/notarized and the manifest says so.

@@ -1,8 +1,7 @@
 name: Draft release
 
-# Builds a fail-closed, unsigned draft release for inspection. Publishing is a
-# separate human decision after Apple notarization and Windows Authenticode
-# credentials are configured and every downloaded artifact has been tested.
+# Builds an unsigned-desktop draft with Android debug-signed sideload APKs.
+# Publishing is a separate human decision after production signing and checks.
 on:
   workflow_dispatch:
     inputs:
@@ -68,7 +67,8 @@ jobs:
           import json, pathlib, re, sys, xml.etree.ElementTree as ET
           expected = sys.argv[1]
           root = pathlib.Path('.')
-          tauri = json.loads((root / 'src-tauri/tauri.conf.json').read_text())['version']
+          tauri_config = json.loads((root / 'src-tauri/tauri.conf.json').read_text())
+          tauri = tauri_config['version']
           desktop = re.search(r'^version\s*=\s*"([^"]+)"', (root / 'src-tauri/Cargo.toml').read_text(), re.M).group(1)
           workspace = re.search(r'^version\s*=\s*"([^"]+)"', (root / 'Cargo.toml').read_text().split('[workspace.package]', 1)[1], re.M).group(1)
           metainfo_root = ET.parse(root / 'packaging/flatpak/io.github.adamnolle.cubesolver.metainfo.xml').getroot()
@@ -81,6 +81,11 @@ jobs:
               'Flatpak metainfo': flatpak,
           }
           wrong = {path: value for path, value in versions.items() if value != expected}
+          major, minor, patch = map(int, expected.split('.'))
+          expected_android_code = major * 1_000_000 + minor * 1_000 + patch
+          android_code = tauri_config['bundle']['android']['versionCode']
+          if android_code != expected_android_code:
+              wrong['Android versionCode'] = {'actual': android_code, 'expected': expected_android_code}
           if wrong:
               raise SystemExit(f'version mismatch: expected {expected}, got {wrong}')
           print(f'version contract verified: {expected}')
@@ -443,6 +448,7 @@ jobs:
               'runner_arch': os.environ['RUNNER_ARCH'],
               'target': '${{ matrix.target }}',
               'signed': False,
+              'signing_profile': 'none',
               'notarized': False,
               'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),
               'tauri_cli': subprocess.check_output(['cargo', 'tauri', '--version'], text=True).strip(),
@@ -460,9 +466,163 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  build-android:
+    name: Build Android sideload APKs
+    needs: verify-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.verify-source.outputs.version }}
+      NDK_VERSION: "27.0.12077973"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Rust and Android targets
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown,aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" "platforms;android-34" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> target\nsrc-tauri -> src-tauri/target"
+
+      - name: Install pinned Android build tools
+        uses: taiki-e/install-action@43aecc8d72668fbcfe75c31400bc4f890f1c5853 # v2
+        with:
+          tool: wasm-pack@0.13.1,tauri-cli@2.11.4
+          fallback: cargo-install
+
+      - name: Verify generated frontend
+        run: python3 tools/gen-index.py --check
+
+      - name: Restore stable debug signing key
+        id: debugkey
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: Create debug signing key
+        if: steps.debugkey.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -storepass android \
+            -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 36500 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Generate Android project
+        working-directory: src-tauri
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
+        run: |
+          cargo tauri android init --ci
+          python ../tools/configure-android.py
+          cargo tauri icon ../store-assets/android-launcher-icon.png --output "$RUNNER_TEMP/tauri-icon-output"
+          python ../tools/install-android-icons.py "$RUNNER_TEMP/tauri-icon-output/android"
+          sed -i '0,/^android {/s//android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' gen/android/app/build.gradle.kts
+
+      - name: Build debug-signed APKs
+        working-directory: src-tauri
+        env:
+          GRADLE_USER_HOME: ${{ runner.temp }}/gradle-home
+        run: |
+          set -o pipefail
+          rm -rf gen/android/.gradle/configuration-cache
+          if ! cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7; then
+            rm -rf "$GRADLE_USER_HOME"/caches/*/transforms gen/android/.gradle/configuration-cache
+            cargo tauri android build --debug --features custom-protocol --apk --target aarch64 --target armv7
+          fi
+
+      - name: Normalize and verify APK artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, shutil, zipfile, os
+          apk_root = pathlib.Path('src-tauri/gen/android/app/build/outputs/apk')
+          apks = list(apk_root.rglob('*.apk'))
+          if len(apks) != 2:
+              raise SystemExit(f'expected two ABI APKs, found {len(apks)}: {apks}')
+          found = set()
+          out = pathlib.Path('dist'); out.mkdir(exist_ok=True)
+          for apk in apks:
+              with zipfile.ZipFile(apk) as archive:
+                  names = archive.namelist()
+              if any(name.startswith('lib/arm64-v8a/') for name in names):
+                  abi = 'arm64'
+              elif any(name.startswith('lib/armeabi-v7a/') for name in names):
+                  abi = 'armv7'
+              else:
+                  raise SystemExit(f'APK contains no expected native ABI: {apk}')
+              if abi in found:
+                  raise SystemExit(f'duplicate {abi} APK')
+              found.add(abi)
+              shutil.copy2(apk, out / f"Solvaus-{os.environ['RELEASE_TAG']}-android-{abi}-debug-signed.apk")
+          if found != {'arm64', 'armv7'}:
+              raise SystemExit(f'missing Android ABI APK: {found}')
+          PY
+          version_code="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["bundle"]["android"]["versionCode"])')"
+          for apk in dist/*.apk; do
+            cert="$RUNNER_TEMP/apk-cert.txt"
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk" > "$cert"
+            grep -F 'CN=Android Debug' "$cert"
+            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" | grep -F "versionName='$VERSION'"
+            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" | grep -F "versionCode='$version_code'"
+          done
+
+      - name: Write Android build metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, platform, subprocess
+          metadata = {
+              'tag': os.environ['RELEASE_TAG'], 'version': os.environ['VERSION'],
+              'commit': os.environ['GITHUB_SHA'], 'runner_os': os.environ['RUNNER_OS'],
+              'runner_arch': os.environ['RUNNER_ARCH'],
+              'target': 'aarch64-linux-android,armv7-linux-androideabi',
+              'signed': True, 'signing_profile': 'android-debug-keystore', 'notarized': False,
+              'rustc': subprocess.check_output(['rustc', '--version'], text=True).strip(),
+              'tauri_cli': subprocess.check_output(['cargo', 'tauri', '--version'], text=True).strip(),
+              'wasm_pack': subprocess.check_output(['wasm-pack', '--version'], text=True).strip(),
+              'python': platform.python_version(),
+          }
+          pathlib.Path('dist/build-metadata-release-android.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+
+      - name: Upload Android release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-android
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
   assemble-draft:
     name: Assemble verified draft
-    needs: [verify-source, build]
+    needs: [verify-source, build, build-android]
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
@@ -495,11 +655,14 @@ jobs:
               f'Solvaus-{tag}-linux-x86_64.flatpak',
               f'Solvaus-{tag}-macos-universal.dmg',
               f'Solvaus-{tag}-windows-x86_64-setup.exe',
+              f'Solvaus-{tag}-android-arm64-debug-signed.apk',
+              f'Solvaus-{tag}-android-armv7-debug-signed.apk',
           }
           expected_metadata = {
               'build-metadata-release-linux-x86_64.json': 'x86_64-unknown-linux-gnu',
               'build-metadata-release-macos-universal.json': 'universal-apple-darwin',
               'build-metadata-release-windows-x86_64.json': 'x86_64-pc-windows-msvc',
+              'build-metadata-release-android.json': 'aarch64-linux-android,armv7-linux-androideabi',
           }
           incoming_files = [path for path in incoming.rglob('*') if path.is_file() or path.is_symlink()]
           if any(path.is_symlink() for path in incoming_files):
@@ -520,10 +683,11 @@ jobs:
               'build-metadata-release-linux-x86_64.json': ('Linux', {'X64'}),
               'build-metadata-release-macos-universal.json': ('macOS', {'X64', 'ARM64'}),
               'build-metadata-release-windows-x86_64.json': ('Windows', {'X64'}),
+              'build-metadata-release-android.json': ('Linux', {'X64'}),
           }
           exact_fields = {
               'tag', 'version', 'commit', 'runner_os', 'runner_arch', 'target',
-              'signed', 'notarized', 'rustc', 'tauri_cli', 'wasm_pack', 'python',
+              'signed', 'signing_profile', 'notarized', 'rustc', 'tauri_cli', 'wasm_pack', 'python',
           }
           metadata = [root / name for name in sorted(expected_metadata)]
           builders = []
@@ -543,8 +707,10 @@ jobs:
               wrong = {key: (value.get(key), expected_value) for key, expected_value in required.items() if value.get(key) != expected_value}
               if value['runner_arch'] not in allowed_arches:
                   wrong['runner_arch'] = (value['runner_arch'], sorted(allowed_arches))
-              if value['signed'] is not False or value['notarized'] is not False:
-                  wrong['signing'] = ((value['signed'], value['notarized']), (False, False))
+              is_android = path.name == 'build-metadata-release-android.json'
+              wanted_signing = (True, 'android-debug-keystore') if is_android else (False, 'none')
+              if (value['signed'], value['signing_profile']) != wanted_signing or value['notarized'] is not False:
+                  wrong['signing'] = ((value['signed'], value['signing_profile'], value['notarized']), (*wanted_signing, False))
               for tool in ('rustc', 'tauri_cli', 'wasm_pack', 'python'):
                   if not isinstance(value[tool], str) or not value[tool].strip():
                       wrong[tool] = (value[tool], 'non-empty string')
@@ -564,7 +730,8 @@ jobs:
               'version': os.environ['VERSION'],
               'commit': os.environ['GITHUB_SHA'],
               'workflow_run': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-              'signed': False,
+              'publisher_signed': False,
+              'android_apks_signed_with': 'debug keystore; sideload only',
               'notarized': False,
               'publication_state': 'draft',
               'files': files,
@@ -581,6 +748,7 @@ jobs:
             dist/*.flatpak
             dist/*.dmg
             dist/*.exe
+            dist/*.apk
 
       - name: Create or replace the unsigned draft release
         env:
@@ -611,13 +779,13 @@ jobs:
             gh release upload "$RELEASE_TAG" "${assets[@]}"
             gh release edit "$RELEASE_TAG" \
               --draft \
-              --title "Cube Solver $RELEASE_TAG (unsigned draft)" \
+              --title "Cube Solver $RELEASE_TAG (unsigned desktop; Android debug-signed)" \
               --notes-file "docs/release-notes-${RELEASE_TAG}.md"
           else
             gh release create "$RELEASE_TAG" "${assets[@]}" \
               --draft \
               --verify-tag \
-              --title "Cube Solver $RELEASE_TAG (unsigned draft)" \
+              --title "Cube Solver $RELEASE_TAG (unsigned desktop; Android debug-signed)" \
               --notes-file "docs/release-notes-${RELEASE_TAG}.md"
           fi
           final_json="$(gh release view "$RELEASE_TAG" --json url,isDraft,tagName,targetCommitish)"
