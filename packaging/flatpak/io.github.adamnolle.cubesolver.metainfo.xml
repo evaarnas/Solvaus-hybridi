@@ -11,8 +11,8 @@
     <p>Solutions are replayed through the cube model up to 21×21; larger native solves rely on the engine's solved-state result and are labelled as unverified.</p>
   </description>
   <launchable type="desktop-id">io.github.adamnolle.cubesolver.desktop</launchable>
-  <url type="homepage">https://github.com/AdamNolle/Cube-Solver</url>
-  <url type="bugtracker">https://github.com/AdamNolle/Cube-Solver/issues</url>
+  <url type="homepage">https://github.com/evaarnas/Solvaus-hybridi</url>
+  <url type="bugtracker">https://github.com/evaarnas/Solvaus-hybridi/issues</url>
   <categories>
     <category>Education</category>
   </categories>

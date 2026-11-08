@@ -3,7 +3,7 @@ name = "cube_wasm"
 edition.workspace = true
 version.workspace = true
 description = "WebAssembly bridge for the Cube Solver model and verified solving engines"
-repository = "https://github.com/AdamNolle/Cube-Solver"
+repository = "https://github.com/evaarnas/Solvaus-hybridi"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
