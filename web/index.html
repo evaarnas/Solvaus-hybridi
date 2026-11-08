@@ -46,11 +46,12 @@ html.android .control-rail button{min-height:44px}
 html.android .control-rail input[type=range]{height:28px!important}
 html.android .control-rail input[type=number]{height:40px!important;font-size:16px!important}
 html.android [data-size-note]{font-size:12px!important}
-@media (orientation:landscape) and (max-height:520px){
-  html.android .studio-layout{flex-direction:row!important}
-  html.android .app-shell{height:100vh!important;overflow:hidden!important}
-  html.android .cube-viewport{position:relative!important;height:auto!important;flex:1!important}
-  html.android .control-rail{width:44%!important;overflow-y:auto!important}
+@media (orientation:landscape){
+  html.android .app-shell{height:100vh!important;height:100dvh!important;min-height:0!important;overflow:hidden!important}
+  html.android .main-area{flex:1 1 0!important;min-height:0!important;overflow:hidden!important}
+  html.android .studio-layout{height:100%!important;min-height:0!important;flex-direction:row!important;align-items:stretch!important}
+  html.android .cube-viewport{position:relative!important;top:auto!important;height:auto!important;min-height:0!important;flex:1 1 0!important}
+  html.android .control-rail{width:min(40vw,420px)!important;min-width:280px;max-height:100%;overflow-y:auto!important;flex:0 1 auto!important}
 }
 </style>
 <script>if(/Android/i.test(navigator.userAgent))document.documentElement.classList.add('android')</script>
