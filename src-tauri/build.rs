@@ -75,8 +75,11 @@ fn assert_frontend_is_fresh() {
 fn assert_packaged_style_policy() {
     let config = std::fs::read_to_string("tauri.conf.json")
         .expect("Cube Solver build aborted: cannot read src-tauri/tauri.conf.json");
+    // JSON formatting is not semantically significant; the release-versioning
+    // tool may reformat arrays across lines when it updates version fields.
+    let compact_config: String = config.chars().filter(|ch| !ch.is_whitespace()).collect();
     assert!(
-        config.contains("\"dangerousDisableAssetCspModification\": [\"style-src\"]"),
+        compact_config.contains("\"dangerousDisableAssetCspModification\":[\"style-src\"]"),
         "Cube Solver build aborted: Tauri style-src nonce injection would block the UI's inline styles. Keep dangerousDisableAssetCspModification scoped to style-src."
     );
     println!("cargo:rerun-if-changed=tauri.conf.json");
