@@ -475,7 +475,7 @@ checksum = "52560adf09603e58c9a7ee1fe1dcb95a16927b17c127f0ac02d6e768a0e25bc1"
 
 [[package]]
 name = "cube-solver"
-version = "0.2.19"
+version = "0.2.20"
 dependencies = [
  "cc",
  "cube_core",
@@ -487,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "cube_core"
-version = "0.2.19"
+version = "0.2.20"
 dependencies = [
  "rand",
  "rand_chacha",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "cube_solver"
-version = "0.2.19"
+version = "0.2.20"
 dependencies = [
  "crossbeam-channel",
  "cube_core",
@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "cube_wasm"
-version = "0.2.19"
+version = "0.2.20"
 dependencies = [
  "console_error_panic_hook",
  "cube_core",
