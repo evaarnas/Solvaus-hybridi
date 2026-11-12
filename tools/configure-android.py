@@ -23,35 +23,12 @@ BUILD_TASK_PACKAGE = "package com.gmail.solvaus.hybridi.kotlin"
 MAIN_ACTIVITY_SOURCE = '''package com.gmail.solvaus.hybridi
 
 import android.os.Bundle
-import android.view.View
 import androidx.core.view.WindowCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     WindowCompat.enableEdgeToEdge(window)
     super.onCreate(savedInstanceState)
-
-    val content = findViewById<View>(android.R.id.content)
-    val initialPadding = intArrayOf(
-      content.paddingLeft, content.paddingTop, content.paddingRight, content.paddingBottom,
-    )
-    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
-      val safe = insets.getInsets(
-        WindowInsetsCompat.Type.systemBars() or
-          WindowInsetsCompat.Type.displayCutout() or
-          WindowInsetsCompat.Type.ime(),
-      )
-      view.setPadding(
-        initialPadding[0] + safe.left,
-        initialPadding[1] + safe.top,
-        initialPadding[2] + safe.right,
-        initialPadding[3] + safe.bottom,
-      )
-      WindowInsetsCompat.CONSUMED
-    }
-    ViewCompat.requestApplyInsets(content)
   }
 }
 '''
@@ -263,7 +240,7 @@ def main() -> int:
     fix_build_task_package()
     sync_version()
     configure_display()
-    print("Configured edge-to-edge insets and unrestricted Android orientation/resizing")
+    print("Configured edge-to-edge display and unrestricted Android orientation/resizing")
     return 0
 
 
