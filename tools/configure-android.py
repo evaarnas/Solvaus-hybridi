@@ -24,11 +24,27 @@ MAIN_ACTIVITY_SOURCE = '''package com.gmail.solvaus.hybridi
 
 import android.os.Bundle
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     WindowCompat.enableEdgeToEdge(window)
+    hideSystemBars()
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus) hideSystemBars()
+  }
+
+  private fun hideSystemBars() {
+    WindowInsetsControllerCompat(window, window.decorView).let { controller ->
+      controller.systemBarsBehavior =
+        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+      controller.hide(WindowInsetsCompat.Type.systemBars())
+    }
   }
 }
 '''
