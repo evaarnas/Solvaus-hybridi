@@ -27,8 +27,8 @@ import androidx.core.view.WindowCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    WindowCompat.enableEdgeToEdge(window)
     super.onCreate(savedInstanceState)
+    WindowCompat.enableEdgeToEdge(window)
   }
 }
 '''
