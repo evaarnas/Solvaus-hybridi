@@ -174,7 +174,7 @@ def main() -> None:
     replace_once(workflow, r"tag must look like v\d+\.\d+\.\d+", f"tag must look like {tag}")
     if not notes.exists():
         notes.write_text(
-            f"# Solvaus {tag}\n\n" + "".join(f"- {note.strip()}\n" for note in notes_content),
+            f"# Solvaus-hybridi {tag}\n\n" + "".join(f"- {note.strip()}\n" for note in notes_content),
             encoding="utf-8",
             newline="",
         )
