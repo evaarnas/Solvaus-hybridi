@@ -3,6 +3,9 @@ name = "headless_solver"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 cube_core = { path = "../crates/cube_core" }
 cube_solver = { path = "../crates/cube_solver", features = ["reduction"] }

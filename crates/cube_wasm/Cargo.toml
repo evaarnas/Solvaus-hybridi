@@ -5,6 +5,9 @@ version.workspace = true
 description = "WebAssembly bridge for the Cube Solver model and verified solving engines"
 repository = "https://github.com/evaarnas/Solvaus-hybridi"
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

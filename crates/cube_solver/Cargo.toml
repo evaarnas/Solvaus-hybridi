@@ -3,6 +3,9 @@ name = "cube_solver"
 edition.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 crossbeam-channel.workspace = true
 cube_core = { path = "../cube_core" }

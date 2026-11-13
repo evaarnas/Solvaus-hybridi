@@ -3,6 +3,9 @@ name = "solver_lab_app"
 edition.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 cube_core = { path = "../cube_core" }
 cube_solver = { path = "../cube_solver" }
