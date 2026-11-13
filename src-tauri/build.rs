@@ -195,6 +195,10 @@ fn build_gullicube() {
     use std::path::PathBuf;
 
     let android = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "android");
+    if android && std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").is_ok_and(|width| width == "32") {
+        println!("cargo:warning=Gullicube requires 64-bit Android; skipping 32-bit target");
+        return;
+    }
     let root = Path::new("gullicube");
     let sources = [
         "src/full/gullicube.cpp",
