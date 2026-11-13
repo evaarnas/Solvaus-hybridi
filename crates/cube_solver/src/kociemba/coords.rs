@@ -47,8 +47,8 @@ const fn binom(n: u32, k: u32) -> u32 {
 /// Corner orientation as a base-3 number over the first 7 corners (`0..2187`).
 pub fn twist(c: &CubieCube) -> u16 {
     let mut t = 0u16;
-    for i in 0..7 {
-        t = t * 3 + c.co[i] as u16;
+    for &orientation in c.co.iter().take(7) {
+        t = t * 3 + orientation as u16;
     }
     t
 }
@@ -68,8 +68,8 @@ pub fn set_twist(c: &mut CubieCube, mut t: u16) {
 /// Edge orientation as a base-2 number over the first 11 edges (`0..2048`).
 pub fn flip(c: &CubieCube) -> u16 {
     let mut f = 0u16;
-    for i in 0..11 {
-        f = f * 2 + c.eo[i] as u16;
+    for &orientation in c.eo.iter().take(11) {
+        f = f * 2 + orientation as u16;
     }
     f
 }
