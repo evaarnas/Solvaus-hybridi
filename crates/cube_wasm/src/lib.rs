@@ -2,6 +2,7 @@
 //! engines to the web UI. Single-threaded (the `parallel` feature of
 //! `cube_solver` is disabled), so the solver race runs sequentially in the
 //! browser — same results, just serial.
+#![cfg_attr(target_env = "msvc", allow(linker_messages))]
 
 use cube_core::{Axis, Color, CubeSize, CubeState, Face, Move, StickerCube};
 use cube_solver::{run_solver_lab_tiered, wide_move_set, SolverBudget};

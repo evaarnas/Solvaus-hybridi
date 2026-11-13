@@ -1,3 +1,5 @@
+#![cfg_attr(target_env = "msvc", allow(linker_messages))]
+
 mod gullicube;
 
 use cube_core::{Axis, CubeSize, Move};
