@@ -238,9 +238,10 @@ fn build_gullicube() {
     let mut command = match gnu_like {
         Some(compiler) => compiler.to_command(),
         None => {
+            let has_explicit_compiler = explicit_compiler.is_some();
             let mut candidates: Vec<String> = match explicit_compiler {
                 Some(c) => vec![c],
-                None => vec!["g++".to_string(), "clang++".to_string()],
+                None => Vec::new(),
             };
             if cfg!(windows) {
                 for root in ["C:\\msys64", "C:\\mingw64", "C:\\msys2"] {
@@ -249,6 +250,9 @@ fn build_gullicube() {
                             .push(format!("{root}\\{sub}\\bin\\g++.exe").replace("\\\\", "\\"));
                     }
                 }
+            }
+            if !has_explicit_compiler {
+                candidates.extend(["g++".to_string(), "clang++".to_string()]);
             }
             let found = candidates.into_iter().find(|c| {
                 std::process::Command::new(c)
@@ -317,7 +321,12 @@ fn build_gullicube() {
                     .join(" | "),
                 Err(e) => e.to_string(),
             };
-            println!("cargo:warning=Gullicube failed to build ({detail}); the Gullicube solver is disabled in this build");
+            let status = if exe.is_file() && profile_dir.join("data").is_dir() {
+                "keeping the previously built Gullicube solver"
+            } else {
+                "the Gullicube solver is disabled in this build"
+            };
+            println!("cargo:warning=Gullicube failed to build ({detail}); {status}");
             return;
         }
     }
