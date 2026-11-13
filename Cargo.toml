@@ -19,7 +19,6 @@ version = "0.2.20"
 unsafe_code = "forbid"
 
 [workspace.dependencies]
-anyhow = "1"
 crossbeam-channel = "0.5"
 directories = "5"
 eframe = "0.32"
