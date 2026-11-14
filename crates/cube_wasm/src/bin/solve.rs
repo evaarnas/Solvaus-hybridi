@@ -1,5 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::env;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let input = env::args()
         .nth(1)
@@ -50,3 +52,6 @@ fn main() {
         }
     }
 }
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}

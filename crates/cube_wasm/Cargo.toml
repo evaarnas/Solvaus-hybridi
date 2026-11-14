@@ -20,12 +20,12 @@ cube_solver = { path = "../cube_solver", default-features = false, features = ["
 wasm-bindgen = "0.2"
 serde = { workspace = true }
 serde_json.workspace = true
-console_error_panic_hook = "0.1"
 
 # rand pulls in getrandom; enable its js backend so wasm32-unknown-unknown links
 # (the solver only uses seeded RNGs, but getrandom must still compile).
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
+console_error_panic_hook = "0.1"
 
 # The bundled wasm-opt errors on this toolchain's wasm features; skip it (the
 # unoptimised module is still small and correct).
