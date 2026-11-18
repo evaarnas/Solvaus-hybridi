@@ -55,7 +55,12 @@ The 3×3 path is a fast two-phase solver, **not an optimal solver**. Desktop lar
 
 ### Choosing a solver (desktop, 4×4 and larger)
 
-A **Solver** dropdown above the Solve button picks the engine: **[RCube](https://github.com/ShellPuppy/RCube)**, **[Gullicube](https://github.com/rokicki/gullicube/)**, or **Competition**, which runs both in parallel and plays back the shorter solution (the lanes show each engine's move count and time). [Gullicube](https://github.com/rokicki/gullicube/) is vendored C++ (GPL-3.0 / MPL-2.0, see its license files) that runs as a child process; it can use roughly 3 GB of memory and loads about 30 MB of data files. `src-tauri/build.rs` compiles it to `gullicube[.exe]` plus a `data/` folder beside the app binary. It needs `g++` or `clang++` on `PATH` (or `GULLICUBE_CXX`); the MSVC toolchain cannot build it. Without one, the build still succeeds and the [Gullicube](https://github.com/rokicki/gullicube/) options show as "not installed". `SOLVAUS_GULLICUBE` can point at a prebuilt executable. Installers bundle it under `gullicube-runtime/` next to the app (staged in `src-tauri/gullicube-bundle`), provided the build machine had a compiler.
+A **Solver** dropdown above the Solve button picks **[RCube](https://github.com/ShellPuppy/RCube)**, **[Gullicube](https://github.com/rokicki/gullicube/)**, or **Competition**. Competition runs both engines in parallel and offers two selection modes:
+
+- **Shortest** waits for both engines and plays back the shorter successful solution.
+- **Fastest** plays back the first successful solution and cancels the other engine; its progress and elapsed time stop at cancellation.
+
+The solver lanes show each engine's move count and time when available. [Gullicube](https://github.com/rokicki/gullicube/) is vendored C++ (GPL-3.0 / MPL-2.0, see its license files) that runs as a child process; it can use roughly 3 GB of memory and loads about 30 MB of data files. `src-tauri/build.rs` compiles it to `gullicube[.exe]` plus a `data/` folder beside the app binary. It needs `g++` or `clang++` on `PATH` (or `GULLICUBE_CXX`); the MSVC toolchain cannot build it. Without one, the build still succeeds and the [Gullicube](https://github.com/rokicki/gullicube/) options show as "not installed". `SOLVAUS_GULLICUBE` can point at a prebuilt executable. Installers bundle it under `gullicube-runtime/` next to the app (staged in `src-tauri/gullicube-bundle`), provided the build machine had a compiler.
 
 ### Large-cube limits
 
