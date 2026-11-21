@@ -649,13 +649,18 @@ void Cube::PushCenterPieces(byte src, byte dst, byte color)
 				}
 				else
 				{
-					for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], -d);
-					Move(dst, 0, 1);
-					Move(srcl, r, -d);
-					Move(dst, 0, -1);
-					for (uint c = 0; c < stkptr; ++c) Move(srcl, mstack[c], d);
-					Move(dst, 0, 1);
-					Move(srcl, r, d);
+					auto record = [this](byte face, uint depth, int turns)
+					{
+						moveObserver(moveObserverContext, face, depth, turns);
+					};
+					for (uint c = 0; c < stkptr; ++c) record(srcl, mstack[c], -d);
+					record(dst, 0, 1);
+					record(srcl, r, -d);
+					record(dst, 0, -1);
+					for (uint c = 0; c < stkptr; ++c) record(srcl, mstack[c], d);
+					record(dst, 0, 1);
+					record(srcl, r, d);
+					OptomizedMovement(mstack.get(), stkptr, r, src, dst, sq, dq);
 				}
 			}
 		}
