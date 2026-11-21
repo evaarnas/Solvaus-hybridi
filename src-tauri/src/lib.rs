@@ -153,9 +153,10 @@ fn run_gullicube(
     colors: &[u8],
     control: &NativeReductionControl,
     progress: Option<&ProgressFn>,
+    fast: bool,
 ) -> EngineRun {
     let started = Instant::now();
-    let moves = gullicube::solve(n, colors, control, progress);
+    let moves = gullicube::solve(n, colors, control, progress, fast);
     EngineRun {
         id: "gullicube",
         name: "Gullicube",
@@ -172,6 +173,7 @@ fn solve_native(
     control: &NativeReductionControl,
     solver: Solver,
     progress: Option<std::sync::Arc<NativeProgressFn>>,
+    gullicube_fast: bool,
 ) -> Result<Vec<u8>, String> {
     let max_n = if solver == Solver::Rcube {
         MAX_NATIVE_CUBE_SIZE
@@ -207,7 +209,13 @@ fn solve_native(
                     });
                 }
             };
-            vec![run_gullicube(n, colors, control, Some(&gullicube_progress))]
+            vec![run_gullicube(
+                n,
+                colors,
+                control,
+                Some(&gullicube_progress),
+                gullicube_fast,
+            )]
         }
         Solver::Competition | Solver::CompetitionFastest => {
             let fastest = solver == Solver::CompetitionFastest;
@@ -257,6 +265,7 @@ fn solve_native(
                             colors,
                             &gullicube_worker_control,
                             Some(&gullicube_progress),
+                            gullicube_fast,
                         );
                         if run.moves.is_ok() {
                             gullicube_progress(100.0);
@@ -315,7 +324,13 @@ fn solve_native(
             } else {
                 std::thread::scope(|scope| {
                     let gullicube = scope.spawn(|| {
-                        let run = run_gullicube(n, colors, control, Some(&gullicube_progress));
+                        let run = run_gullicube(
+                            n,
+                            colors,
+                            control,
+                            Some(&gullicube_progress),
+                            gullicube_fast,
+                        );
                         gullicube_progress(100.0);
                         run
                     });
@@ -348,7 +363,7 @@ fn solve_with_rcube(
             std::sync::Arc::new(move |info| p(info.percent));
         arc_p
     });
-    solve_native(n, colors, control, Solver::Rcube, native_progress)
+    solve_native(n, colors, control, Solver::Rcube, native_progress, false)
 }
 
 fn rcube_moves(
@@ -718,6 +733,7 @@ async fn solve_stickers(
     n: usize,
     colors: Vec<u8>,
     solver: Option<String>,
+    gullicube_fast: Option<bool>,
 ) -> Result<tauri::ipc::Response, String> {
     let solver = Solver::parse(solver.as_deref().unwrap_or("rcube"))?;
     if solver != Solver::Rcube && !gullicube::is_available() {
@@ -752,6 +768,7 @@ async fn solve_stickers(
                     eprintln!("failed to send solve progress: {error}");
                 }
             })),
+            gullicube_fast.unwrap_or(false),
         )
     })
     .await;
@@ -830,12 +847,14 @@ mod tests {
             let colors = lab.face_colors(n);
 
             let control = cube_wasm::native_reduction_control(n);
-            let result = solve_native(n, &colors, &control, Solver::Gullicube, None).unwrap();
+            let result =
+                solve_native(n, &colors, &control, Solver::Gullicube, None, false).unwrap();
             let result = replay_json_solution(n, &colors, &result);
             assert_eq!(result["winner"], "gullicube");
 
             let control = cube_wasm::native_reduction_control(n);
-            let both = solve_native(n, &colors, &control, Solver::Competition, None).unwrap();
+            let both =
+                solve_native(n, &colors, &control, Solver::Competition, None, false).unwrap();
             let both = replay_json_solution(n, &colors, &both);
             assert_eq!(both["lanes"].as_array().unwrap().len(), 2);
             let counts: Vec<u64> = both["lanes"]

@@ -218,15 +218,18 @@ pub fn solve(
     colors: &[u8],
     control: &NativeReductionControl,
     progress: Option<&(dyn Fn(f64) + Send + Sync)>,
+    fast: bool,
 ) -> Result<Vec<Move>, String> {
     let exe = locate().ok_or_else(|| MISSING_MESSAGE.to_string())?;
     let facelets = facelets(n, colors)?;
     let budget = 10.0 + 50.0 * n as f64 / 1024.0;
 
     let mut command = Command::new(&exe);
+    command.arg(n.to_string()).args(["-f", "-o"]);
+    if fast {
+        command.arg("--fast");
+    }
     command
-        .arg(n.to_string())
-        .args(["-f", "-o"])
         .current_dir(exe.parent().unwrap_or_else(|| Path::new(".")))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

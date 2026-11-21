@@ -643,6 +643,10 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       var selected=self.root.querySelector('[data-competition-mode]:checked');
       return selected&&selected.value==='fastest'?'competition_fastest':'competition';
     }
+    function gullicubeFastMode(self){
+      var selected=self.root.querySelector('[data-gullicube-fast]');
+      return !!(selected && selected.checked);
+    }
     function postNativeSolve(self){
       var core = nativeCore();
       if (!core || !self._solvePending || self._solveDispatch) return false;
@@ -664,7 +668,8 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
         updateNativeSolveProgress(self, requestToken, payload);
       };
       core.invoke('solve_stickers', {
-        requestToken:requestToken, n:self.n, colors:colors, solver:selectedNativeSolver(self), onProgress:progressChannel
+        requestToken:requestToken, n:self.n, colors:colors, solver:selectedNativeSolver(self),
+        gullicubeFast:gullicubeFastMode(self), onProgress:progressChannel
       }).then(function(result){
         onSolveResult(self, { type:'result', jobId:jobId, ok:true, result:decodeNativeSolveResult(result) });
       }).catch(function(error){
@@ -1254,6 +1259,8 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
       var pick = nativeRcube && solverSel ? solverSel.value : 'rcube';
       var compMode = self.root.querySelector('[data-competition-choice]');
       if (compMode) compMode.style.display = nativeRcube && pick === 'competition' ? 'flex' : 'none';
+      var fastMode = self.root.querySelector('[data-gullicube-fast-wrap]');
+      if (fastMode) fastMode.style.display = nativeRcube && pick !== 'rcube' ? 'flex' : 'none';
       var showDet = !(nativeRcube && pick === 'gullicube');
       var showBeam = nativeRcube && pick !== 'rcube';
       // Hide non-running lanes whenever a dedicated complete solver owns the size.
@@ -1364,6 +1371,15 @@ WIRE = r'''  // ===== wire the real Rust solver (WASM) into the design =====
           label.appendChild(radio); label.appendChild(document.createTextNode(option[1])); choice.appendChild(label);
         });
         wrap.appendChild(choice);
+        var fastWrap=document.createElement('label');
+        fastWrap.setAttribute('data-gullicube-fast-wrap','');
+        fastWrap.style.cssText='display:none;align-items:center;gap:5px;margin-top:9px;cursor:pointer;';
+        var fast=document.createElement('input');
+        fast.type='checkbox';
+        fast.setAttribute('data-gullicube-fast','');
+        fastWrap.appendChild(fast);
+        fastWrap.appendChild(document.createTextNode('Gullicube fast mode (less optimal)'));
+        wrap.appendChild(fastWrap);
         solveBtn.parentNode.insertBefore(wrap, solveBtn);
         var tc = nativeCore();
         if (tc && tc.invoke) tc.invoke('available_solvers').then(function(a){
